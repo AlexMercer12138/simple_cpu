@@ -435,27 +435,19 @@ class SimpleCPUAssembler:
             rs1 = self.parse_register(ops[1])
             return (rs1 << 12) | (0 << 8) | (rd << 4) | inst_type.value
 
-        # BEQ, BNE, BLT, BGE: BRC target, Rs2 op Rs1
+        # BEQ, BNE, BLT, BGE: BRC Rs, Rd2 op Rd1
+        # 注意：经过assemble方法处理后，target已经是寄存器
         elif inst_type in [InstructionType.BEQ, InstructionType.BNE,
                           InstructionType.BLT, InstructionType.BGE]:
             target = ops[0]
             rs2 = self.parse_register(ops[1])
             rd = self.parse_register(ops[2])
 
-            # 处理跳转目标
+            # 处理跳转目标（必须是寄存器）
             if target.upper().startswith('R'):
-                # 目标在寄存器中
                 rs1 = self.parse_register(target)
-            elif target.startswith('#'):
-                # 立即数地址
-                imm = self.parse_immediate(target, 20)
-                raise ValueError("分支指令目标必须是寄存器或标签，不支持立即数")
             else:
-                # 标签 - 需要加载到寄存器，这里简化处理
-                # 实际上需要将标签地址先加载到寄存器
-                if target not in self.symbols:
-                    raise ValueError(f"未定义的标签: {target}")
-                raise ValueError("分支指令目标为标签时，需要先将标签地址加载到寄存器")
+                raise ValueError(f"BRC指令目标必须是寄存器，得到: {target}")
 
             return (rs1 << 12) | (rs2 << 8) | (rd << 4) | inst_type.value
 
@@ -463,7 +455,12 @@ class SimpleCPUAssembler:
             raise ValueError(f"未实现的指令类型: {inst_type}")
 
     def assemble(self, source_code: str) -> List[int]:
-        """汇编源代码，返回机器码列表"""
+        """汇编源代码，返回机器码列表
+        
+        支持标签跳转的双指令展开：
+        - JMP label: 直接使用JAL（支持20位立即数）
+        - BRC label, cond: 展开为 SET R15, #label_addr + BRC R15, cond
+        """
         lines = source_code.split('\n')
         self.instructions = []
         self.symbols = {}
@@ -485,10 +482,54 @@ class SimpleCPUAssembler:
         if self.errors:
             raise ValueError("\n".join(self.errors))
 
-        # 第二遍：生成机器码
+        # 第二遍：生成机器码，展开标签跳转
         machine_codes = []
+        # 临时跳转寄存器池（从R15倒着使用）
+        temp_regs = [15, 14, 13, 12, 11, 10]
+        temp_reg_index = 0
+        
         for i, inst in enumerate(self.instructions):
             try:
+                # 检查是否需要双指令展开（BRC指令使用标签）
+                if inst.inst_type in [InstructionType.BEQ, InstructionType.BNE,
+                                      InstructionType.BLT, InstructionType.BGE]:
+                    target = inst.operands[0]
+                    # 如果目标是标签（不是寄存器格式R+数字，不是立即数）
+                    import re
+                    is_register = bool(re.match(r'^[Rr]\d+$', target))
+                    if not is_register and not target.startswith('#'):
+                        if target not in self.symbols:
+                            raise ValueError(f"未定义的标签: {target}")
+                        
+                        # 分配临时寄存器
+                        temp_reg = temp_regs[temp_reg_index % len(temp_regs)]
+                        temp_reg_index += 1
+                        
+                        # 生成第一条指令: SET temp_reg, #label_addr
+                        label_addr = self.symbols[target]
+                        set_inst = Instruction(
+                            InstructionType.SET,
+                            [f"R{temp_reg}", f"#{label_addr}"],
+                            inst.line_num,
+                            f"SET R{temp_reg}, #{label_addr}  ; 加载标签 {target} 地址"
+                        )
+                        set_code = self.encode_instruction(set_inst, i)
+                        machine_codes.append(set_code)
+                        
+                        # 生成第二条指令: BRC temp_reg, Rs2 op Rd
+                        # 替换目标为临时寄存器
+                        new_ops = [f"R{temp_reg}"] + inst.operands[1:]
+                        brc_inst = Instruction(
+                            inst.inst_type,
+                            new_ops,
+                            inst.line_num,
+                            inst.line_content
+                        )
+                        brc_code = self.encode_instruction(brc_inst, i)
+                        machine_codes.append(brc_code)
+                        continue  # 跳过正常编码
+                
+                # 正常编码
                 code = self.encode_instruction(inst, i)
                 machine_codes.append(code)
             except ValueError as e:
