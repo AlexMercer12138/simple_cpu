@@ -248,7 +248,7 @@ loop:
 编译后自动生成 `test.v`：
 
 ```bash
-$ simple-asm test.asm
+$ sass test.asm
 成功: 已生成 test.v (11 条指令)
 ```
 
