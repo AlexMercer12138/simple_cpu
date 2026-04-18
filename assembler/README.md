@@ -20,9 +20,7 @@ pip install -e .
 安装后可在任意路径使用：
 
 ```bash
-simple-asm program.asm
-# 或
-scpu-asm program.asm
+sass program.asm
 ```
 
 ## 使用方法
@@ -31,22 +29,25 @@ scpu-asm program.asm
 
 ```bash
 # 默认输出 Verilog 格式，自动生成 test.v
-simple-asm program.asm
+sass program.asm
 
 # 指定输出格式，自动生成对应扩展名文件
-simple-asm program.asm -f coe      # 生成 program.coe
-simple-asm program.asm -f mif      # 生成 program.mif
-simple-asm program.asm -f hex      # 生成 program.hex
-simple-asm program.asm -f bin      # 生成 program.bin
+sass program.asm -f coe              # 生成 program.coe
+sass program.asm -f mif              # 生成 program.mif
+sass program.asm -f hex              # 生成 program.hex
+sass program.asm -f bin              # 生成 program.bin
 
 # 指定输出文件名
-simple-asm program.asm -o output.v
+sass program.asm -o output.v
 
 # 仅打印到命令行，不保存文件
-simple-asm program.asm -p
+sass program.asm -p
+
+# 生成调试文件(标签表和去注释代码)
+sass program.asm -d
 
 # 生成示例程序
-simple-asm --sample > sample.asm
+sass --sample > sample.asm
 ```
 
 ### 支持的指令语法
@@ -90,6 +91,24 @@ MOV [R0], R2              ; Mem[0] = R2（地址计算使用R0=0）
 > - 全零指令 `0x00000000` 被解释为 `SET R0, #0`
 > - 如果程序未初始化内存或跳转到了空地址，R0会被清零
 > - 遵守约定可避免难以调试的BUG
+
+#### ⚠️ 重要约定：R15 专用于 BRC 指令
+
+**R15 作为汇编器内部临时寄存器，用于 BRC 分支指令展开！**
+
+```asm
+; ❌ 错误：避免使用 R15 作为 JMP 链接寄存器
+JMP R15, label            ; 可能与 BRC 指令冲突
+
+; ✅ 正确：JMP 使用 R1-R14 作为链接寄存器
+JMP R14, label            ; 安全，R14 不会被 BRC 使用
+JMP R5, loop              ; 安全
+```
+
+> **为什么有这个约定？**
+> - BRC 指令使用标签时会展开为 `SET R15, #addr` + `BRC R15, cond`
+> - 如果 JMP 同时使用 R15 作为链接寄存器，会破坏跳转地址
+> - 使用 R1-R14 作为 JMP 链接寄存器可避免冲突
 
 #### JMP 指令
 

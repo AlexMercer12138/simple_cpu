@@ -21,18 +21,23 @@ start:
     MOV R9, R2 >> R1    ; R9 = R2 >> 1 = 127
 
     ; 测试内存操作
-    MOV [R0], R3        ; Mem[0] = R3
-    MOV R10, [R0]       ; R10 = Mem[0]
+    MOV [R10], R3       ; Mem[R10] = R3
+    MOV R11, [R4]       ; R11 = Mem[R4]
 
     ; 测试跳转
-    JMP R11, #10        ; 跳转到地址10
-    JMP R12, R0         ; 跳转到R0指向的地址
+    JMP R12, #13        ; 跳转到地址13
+    MOV R15, #15        ; R15 = 15;
+    JMP R13, R15        ; 跳转到地址15
 
     ; 测试分支
-    BRC R0, R1 == R2    ; if (R1 == R2) PC = R0
-    BRC R0, R1 != R2    ; if (R1 != R2) PC = R0
-    BRC R0, R1 <  R2    ; if (R1 <  R2) PC = R0
-    BRC R0, R1 >= R2    ; if (R1 >= R2) PC = R0
+    MOV R15, #17        ; R15 = 17
+    BRC R15, R1 == R1   ; if (R1 == R1) PC = R15
+    MOV R15, #19        ; R15 = 19
+    BRC R15, R1 != R2   ; if (R1 != R2) PC = R15
+    MOV R15, #21        ; R15 = 21
+    BRC R15, R1 <  R2   ; if (R1 <  R2) PC = R15
+    MOV R15, #23        ; R15 = 23
+    BRC R15, R2 >= R1   ; if (R2 >= R1) PC = R15
 
 loop:
     JMP R13, loop       ; 无限循环

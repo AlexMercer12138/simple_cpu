@@ -48,6 +48,7 @@ class ParsedLine:
     """解析后的行"""
     label: Optional[str] = None
     instruction: Optional[Instruction] = None
+    line_content: str = ""  # 原始行内容（用于调试）
 
 
 class SimpleCPUAssembler:
@@ -372,7 +373,27 @@ class SimpleCPUAssembler:
         else:
             raise ValueError(f"未知指令: {mnemonic} (只支持 MOV, JMP, BRC)")
 
-        return ParsedLine(label=label, instruction=inst)
+        return ParsedLine(label=label, instruction=inst, line_content=line)
+
+    def _is_brc_with_label(self, inst: Instruction) -> bool:
+        """检查BRC指令是否使用标签作为跳转目标
+        
+        BRC指令使用标签时需要展开为两条指令：
+        SET Rtemp, #label_addr
+        BRC Rtemp, cond
+        """
+        if inst.inst_type not in [InstructionType.BEQ, InstructionType.BNE,
+                                  InstructionType.BLT, InstructionType.BGE]:
+            return False
+        
+        target = inst.operands[0]
+        # 检查目标是否为寄存器格式 (R+数字)
+        is_register = bool(re.match(r'^[Rr]\d+$', target))
+        # 检查目标是否为立即数
+        is_immediate = target.startswith('#')
+        
+        # 如果不是寄存器也不是立即数，则认为是标签
+        return not is_register and not is_immediate
 
     def encode_instruction(self, inst: Instruction, current_addr: int) -> int:
         """将指令编码为32位机器码"""
@@ -454,12 +475,14 @@ class SimpleCPUAssembler:
         else:
             raise ValueError(f"未实现的指令类型: {inst_type}")
 
-    def assemble(self, source_code: str) -> List[int]:
-        """汇编源代码，返回机器码列表
+    def assemble(self, source_code: str) -> tuple[List[int], str, str]:
+        """汇编源代码，返回机器码列表及调试信息
         
         支持标签跳转的双指令展开：
         - JMP label: 直接使用JAL（支持20位立即数）
         - BRC label, cond: 展开为 SET R15, #label_addr + BRC R15, cond
+        
+        返回: (机器码列表, 去注释带行号的代码, 标签表文本)
         """
         lines = source_code.split('\n')
         self.instructions = []
@@ -475,21 +498,68 @@ class SimpleCPUAssembler:
                 if parsed.label:
                     self.symbols[parsed.label] = len(self.instructions)
                 if parsed.instruction:
-                    self.instructions.append(parsed.instruction)
+                    # 检查BRC指令是否使用标签作为目标
+                    # 如果是，需要添加占位符让地址计算正确（BRC会被展开为2条指令）
+                    if self._is_brc_with_label(parsed.instruction):
+                        # BRC使用标签时会被展开为SET + BRC两条指令
+                        # 添加两个占位符以确保后续标签地址正确
+                        self.instructions.append(parsed.instruction)
+                        self.instructions.append(None)  # 占位符，表示第二条指令
+                    else:
+                        self.instructions.append(parsed.instruction)
             except ValueError as e:
                 self.errors.append(f"第 {line_num} 行错误: {e}")
 
         if self.errors:
             raise ValueError("\n".join(self.errors))
 
+        # 生成调试文件1: 去注释带PC地址的代码
+        debug_code_lines = []
+        debug_code_lines.append("; 调试文件: 去除注释后的汇编代码")
+        debug_code_lines.append("; 格式: [PC地址] 代码 (十进制/十六进制)")
+        debug_code_lines.append("")
+        
+        # 创建PC地址映射
+        pc = 0
+        for parsed in parsed_lines:
+            # 如果有标签，显示标签
+            if parsed.label:
+                debug_code_lines.append(f"; --- {parsed.label} ---")
+            
+            if parsed.instruction:
+                # 获取原始代码（去注释）
+                clean_line = self.remove_comments(parsed.line_content)
+                if clean_line:
+                    # 检查是否是BRC使用标签（会展开为2条指令）
+                    if self._is_brc_with_label(parsed.instruction):
+                        debug_code_lines.append(f"[{pc:3d}/0x{pc:04X}] {clean_line}  ; 展开为2条指令")
+                        pc += 2
+                    else:
+                        debug_code_lines.append(f"[{pc:3d}/0x{pc:04X}] {clean_line}")
+                        pc += 1
+        
+        debug_code = '\n'.join(debug_code_lines)
+        
+        # 生成调试文件2: 标签表
+        debug_symbols_lines = []
+        debug_symbols_lines.append("; 调试文件: 标签地址表")
+        debug_symbols_lines.append("; 格式: 标签名 = 地址(十进制) / 地址(十六进制)")
+        debug_symbols_lines.append("")
+        
+        for label, addr in sorted(self.symbols.items(), key=lambda x: x[1]):
+            debug_symbols_lines.append(f"{label:20s} = {addr:3d} (0x{addr:04X})")
+        
+        debug_symbols = '\n'.join(debug_symbols_lines)
+
         # 第二遍：生成机器码，展开标签跳转
         machine_codes = []
-        # 临时跳转寄存器池（从R15倒着使用）
-        temp_regs = [15, 14, 13, 12, 11, 10]
-        temp_reg_index = 0
         
         for i, inst in enumerate(self.instructions):
             try:
+                # 跳过占位符（None）
+                if inst is None:
+                    continue
+                
                 # 检查是否需要双指令展开（BRC指令使用标签）
                 if inst.inst_type in [InstructionType.BEQ, InstructionType.BNE,
                                       InstructionType.BLT, InstructionType.BGE]:
@@ -501,9 +571,9 @@ class SimpleCPUAssembler:
                         if target not in self.symbols:
                             raise ValueError(f"未定义的标签: {target}")
                         
-                        # 分配临时寄存器
-                        temp_reg = temp_regs[temp_reg_index % len(temp_regs)]
-                        temp_reg_index += 1
+                        # 分配临时寄存器 - 使用固定寄存器15作为BRC专用临时寄存器
+                        # 约定：R15专用于BRC分支指令，JMP返回地址使用其他寄存器(R1-R14)
+                        temp_reg = 15
                         
                         # 生成第一条指令: SET temp_reg, #label_addr
                         label_addr = self.symbols[target]
@@ -538,7 +608,7 @@ class SimpleCPUAssembler:
         if self.errors:
             raise ValueError("\n".join(self.errors))
 
-        return machine_codes
+        return machine_codes, debug_code, debug_symbols
 
     def format_verilog(self, codes: List[int]) -> str:
         """格式化为Verilog初始化代码"""
@@ -549,8 +619,7 @@ class SimpleCPUAssembler:
             '    output reg [31:0] prog_data',
             ');',
             'always @(*) begin',
-            '    case (prog_addr)',
-            '        default: prog_data = 0;'
+            '    case (prog_addr)'
         ]
         for i, code in enumerate(codes):
             lines.append(f"        {i} : prog_data = 32'h{code:08X};")
@@ -664,12 +733,13 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  simple-asm program.asm                    # 默认Verilog格式输出
-  simple-asm program.asm -o output.v -f verilog
-  simple-asm program.asm -o output.coe -f coe    # Xilinx COE格式
-  simple-asm program.asm -o output.mif -f mif    # Altera MIF格式
-  simple-asm program.asm -f hex               # 纯十六进制
-  simple-asm --sample > sample.asm            # 生成示例程序
+  sass program.asm                          # 默认Verilog格式输出
+  sass program.asm -o output.v -f verilog
+  sass program.asm -o output.coe -f coe          # Xilinx COE格式
+  sass program.asm -o output.mif -f mif          # Altera MIF格式
+  sass program.asm -f hex                        # 纯十六进制
+  sass program.asm -d                            # 生成调试文件
+  sass --sample > sample.asm                     # 生成示例程序
 
 支持的指令语法:
   MOV 指令:
@@ -707,6 +777,7 @@ def main():
     parser.add_argument('--sample', action='store_true', help='输出生成的示例程序')
     parser.add_argument('--depth', type=int, default=256, help='MIF文件深度 (默认: 256)')
     parser.add_argument('-p', '--print', action='store_true', help='仅打印到命令行，不保存文件')
+    parser.add_argument('-d', '--debug', action='store_true', help='生成调试文件(标签表和去注释代码)')
 
     args = parser.parse_args()
 
@@ -733,7 +804,7 @@ def main():
     # 汇编
     assembler = SimpleCPUAssembler()
     try:
-        machine_codes = assembler.assemble(source_code)
+        machine_codes, debug_code, debug_symbols = assembler.assemble(source_code)
     except ValueError as e:
         print(f"汇编错误:\n{e}", file=sys.stderr)
         sys.exit(1)
@@ -752,6 +823,11 @@ def main():
             'bin': '.bin'
         }
         output_file = base_name + ext_map[args.format]
+    
+    # 确定调试文件名
+    debug_base = os.path.splitext(output_file)[0]
+    debug_code_file = debug_base + "_debug.asm"
+    debug_symbols_file = debug_base + "_symbols.txt"
 
     # 格式化和输出
     is_binary = False
@@ -791,6 +867,18 @@ def main():
                 with open(output_file, 'w', encoding='utf-8') as f:
                     f.write(output)
             print(f"成功: 已生成 {output_file} ({len(machine_codes)} 条指令)")
+            
+            # 保存调试文件(仅在--debug模式下)
+            if args.debug:
+                try:
+                    with open(debug_code_file, 'w', encoding='utf-8') as f:
+                        f.write(debug_code)
+                    with open(debug_symbols_file, 'w', encoding='utf-8') as f:
+                        f.write(debug_symbols)
+                    print(f"调试: 已生成 {debug_code_file} 和 {debug_symbols_file}")
+                except Exception as e:
+                    print(f"警告: 调试文件写入失败: {e}", file=sys.stderr)
+                
         except Exception as e:
             print(f"错误: 写入文件失败: {e}", file=sys.stderr)
             sys.exit(1)

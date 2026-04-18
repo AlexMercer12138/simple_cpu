@@ -22,6 +22,23 @@
 
 module simple_cpu_tb();
 
+    localparam  SET  = 4'b0000;
+    localparam  ADD  = 4'b0001;
+    localparam  SUB  = 4'b0010;
+    localparam  AND  = 4'b0011;
+    localparam  OR   = 4'b0100;
+    localparam  XOR  = 4'b0101;
+    localparam  SLL  = 4'b0110;
+    localparam  SRL  = 4'b0111;
+    localparam  MWR  = 4'b1000;
+    localparam  MRD  = 4'b1001;
+    localparam  JAL  = 4'b1010;
+    localparam  JALR = 4'b1011;
+    localparam  BEQ  = 4'b1100;
+    localparam  BNE  = 4'b1101;
+    localparam  BLT  = 4'b1110;
+    localparam  BGE  = 4'b1111;
+
     reg clk = 0, rst_n = 0;
 
     // Clock generation: 50MHz (period = 20ns)
@@ -33,7 +50,7 @@ module simple_cpu_tb();
 
     // Reset generation
     initial begin
-        #100 rst_n = 1;
+        #2000 rst_n = 1;
     end
 
     // Signals for CPU connection
@@ -59,16 +76,75 @@ module simple_cpu_tb();
     wire [1:0]  m_axi_rresp;
     wire [31:0] m_axi_rdata;
 
-    // Internal signals for monitoring
-    wire        prog_step;
-    wire [31:0] prog_data_internal;
-    wire [7:0]  prog_addr_internal;
+    // Opcode to ASCII string function
+    function [31:0] Opcode_ascii(
+        input [3:0] opcode
+    );
+        case (opcode)
+            SET : Opcode_ascii = "SET ";
+            ADD : Opcode_ascii = "ADD ";
+            SUB : Opcode_ascii = "SUB ";
+            AND : Opcode_ascii = "AND ";
+            OR  : Opcode_ascii = "OR  ";
+            XOR : Opcode_ascii = "XOR ";
+            SLL : Opcode_ascii = "SLL ";
+            SRL : Opcode_ascii = "SRL ";
+            MWR : Opcode_ascii = "MWR ";
+            MRD : Opcode_ascii = "MRD ";
+            JAL : Opcode_ascii = "JAL ";
+            JALR: Opcode_ascii = "JALR";
+            BEQ : Opcode_ascii = "BEQ ";
+            BNE : Opcode_ascii = "BNE ";
+            BLT : Opcode_ascii = "BLT ";
+            BGE : Opcode_ascii = "BGE ";
+            default: Opcode_ascii = "????";
+        endcase
+    endfunction
 
-    // Instruction trace: print instruction when prog_step is enabled
+    // Instruction trace: print formatted instruction when prog_step is enabled
     always @(posedge clk) begin
-        if (rst_n && prog_step) begin
-            $display("[%0t] PC=%0d (0x%02X), Instruction=0x%08X", 
-                     $time, prog_addr_internal, prog_addr_internal, prog_data_internal);
+        if (cpu_inst.prog_step) begin
+            case (prog_data[3:0])
+                // I-type: SET, JAL - Rd, Imm
+                SET, JAL: begin
+                    $display("[%0d] : %s R%0d, #%0d", 
+                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[7:4], prog_data[31:12]);
+                end
+                
+                // R-type: ADD, SUB, AND, OR, XOR, SLL, SRL - Rd, Rs2, Rs1
+                ADD, SUB, AND, OR, XOR, SLL, SRL: begin
+                    $display("[%0d] : %s R%0d, R%0d R%0d", 
+                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[7:4], prog_data[11:8], prog_data[15:12]);
+                end
+                
+                // M-type: MWR - [Rs1], Rs2
+                MWR: begin
+                    $display("[%0d] : %s [R%0d], R%0d", 
+                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[15:12], prog_data[11:8]);
+                end
+                
+                // M-type: MRD - Rd, [Rs1]
+                MRD: begin
+                    $display("[%0d] : %s R%0d, [R%0d]", 
+                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[7:4], prog_data[15:12]);
+                end
+                
+                // J-type: JALR - Rd, Rs1
+                JALR: begin
+                    $display("[%0d] : %s R%0d, R%0d", 
+                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[7:4], prog_data[15:12]);
+                end
+                
+                // B-type: BEQ, BNE, BLT, BGE - Rs1, Rs2, Rd (branch if Rs2 op Rd, jump to Rs1)
+                BEQ, BNE, BLT, BGE: begin
+                    $display("[%0d] : %s R%0d, R%0d R%0d", 
+                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[15:12], prog_data[11:8], prog_data[7:4]);
+                end
+                
+                default: begin
+                    $display("[%0d] : UNKNOWN OPCODE (0x%08X)", prog_addr, prog_data);
+                end
+            endcase
         end
     end
 
@@ -109,13 +185,13 @@ module simple_cpu_tb();
         .m_axi_rdata    (m_axi_rdata)
     );
 
-    // Access internal signals for monitoring
-    assign prog_step = cpu_inst.prog_step;
-    assign prog_addr_internal = cpu_inst.prog_addr;
-    assign prog_data_internal = prog_data;
-
     // Instantiate Program Memory (ROM)
-    instr_test rom_inst (
+    // instr_test rom_inst (
+    //     .prog_addr      (prog_addr),
+    //     .prog_data      (prog_data)
+    // );
+
+    hello_world rom_inst (
         .prog_addr      (prog_addr),
         .prog_data      (prog_data)
     );
@@ -157,30 +233,5 @@ module simple_cpu_tb();
         .S_AXI_RVALID   (m_axi_rvalid),
         .S_AXI_RREADY   (m_axi_rready)
     );
-
-    // Test sequence
-    initial begin
-        $display("========================================");
-        $display("Simple CPU Testbench Started");
-        $display("========================================");
-        
-        // Wait for reset release
-        @(posedge rst_n);
-        $display("[%0t] Reset released, CPU starting...", $time);
-        
-        // Run for some cycles
-        repeat(100) @(posedge clk);
-        
-        $display("========================================");
-        $display("Simulation finished");
-        $display("========================================");
-        $finish;
-    end
-
-    // Dump waveforms for waveform viewer
-    initial begin
-        $dumpfile("simple_cpu_tb.vcd");
-        $dumpvars(0, simple_cpu_tb);
-    end
 
 endmodule

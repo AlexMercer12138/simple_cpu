@@ -34,8 +34,7 @@ setup(
     python_requires=">=3.6",
     entry_points={
         "console_scripts": [
-            "simple-asm=assembler:main",
-            "scpu-asm=assembler:main",
+            "sass=assembler:main",
         ],
     },
     keywords="assembler cpu riscv verilog fpga",

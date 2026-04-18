@@ -37,6 +37,9 @@ work/
 *.vstf
 transcript
 
+# Vivado project folder
+xpr/
+
 # Generated files (keep source only)
 assembler/*.v
 assembler/*.coe
