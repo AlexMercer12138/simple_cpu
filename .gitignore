@@ -37,6 +37,10 @@ work/
 *.vstf
 transcript
 
+# Icarus Verilog
+*.vvp
+*.vcd
+
 # Vivado project folder
 xpr/
 
