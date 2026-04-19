@@ -22,22 +22,25 @@
 
 module simple_cpu_tb();
 
-    localparam  SET  = 4'b0000;
-    localparam  ADD  = 4'b0001;
-    localparam  SUB  = 4'b0010;
-    localparam  AND  = 4'b0011;
-    localparam  OR   = 4'b0100;
-    localparam  XOR  = 4'b0101;
-    localparam  SLL  = 4'b0110;
-    localparam  SRL  = 4'b0111;
-    localparam  MWR  = 4'b1000;
-    localparam  MRD  = 4'b1001;
-    localparam  JAL  = 4'b1010;
-    localparam  JALR = 4'b1011;
-    localparam  BEQ  = 4'b1100;
-    localparam  BNE  = 4'b1101;
-    localparam  BLT  = 4'b1110;
-    localparam  BGE  = 4'b1111;
+    localparam  OP_IMMEDIATE            = 4'b0001;
+    localparam  OP_REGISTER             = 4'b0010;
+
+    localparam  FUNC_SET                = 4'b0000;
+    localparam  FUNC_ADD                = 4'b0001;
+    localparam  FUNC_SUB                = 4'b0010;
+    localparam  FUNC_AND                = 4'b0011;
+    localparam  FUNC_OR                 = 4'b0100;
+    localparam  FUNC_XOR                = 4'b0101;
+    localparam  FUNC_SLL                = 4'b0110;
+    localparam  FUNC_SRL                = 4'b0111;
+    localparam  FUNC_SRA                = 4'b1000;
+    localparam  FUNC_MWR                = 4'b1001;
+    localparam  FUNC_MRD                = 4'b1010;
+    localparam  FUNC_JAL                = 4'b1011;
+    localparam  FUNC_BEQ                = 4'b1100;
+    localparam  FUNC_BNE                = 4'b1101;
+    localparam  FUNC_BLT                = 4'b1110;
+    localparam  FUNC_BGE                = 4'b1111;
 
     reg clk = 0, rst_n = 0;
 
@@ -50,7 +53,13 @@ module simple_cpu_tb();
 
     // Reset generation
     initial begin
-        #2000 rst_n = 1;
+        #200 rst_n = 1;
+    end
+
+    // Simulation timeout - finish after enough time to execute all instructions
+    initial begin
+        #10000 $display("=== Simulation Timeout ===");
+        $finish;
     end
 
     // Signals for CPU connection
@@ -79,69 +88,156 @@ module simple_cpu_tb();
     wire [1:0]  m_axi_rresp;
     wire [31:0] m_axi_rdata;
 
-    // Opcode to ASCII string function
-    function [31:0] Opcode_ascii(
-        input [3:0] opcode
+    // Funct to ASCII string function (returns mnemonic with suffix)
+    function [47:0] Opcode_ascii(
+        input [3:0] opcode,
+        input [3:0] funct
     );
-        case (opcode)
-            SET : Opcode_ascii = "SET ";
-            ADD : Opcode_ascii = "ADD ";
-            SUB : Opcode_ascii = "SUB ";
-            AND : Opcode_ascii = "AND ";
-            OR  : Opcode_ascii = "OR  ";
-            XOR : Opcode_ascii = "XOR ";
-            SLL : Opcode_ascii = "SLL ";
-            SRL : Opcode_ascii = "SRL ";
-            MWR : Opcode_ascii = "MWR ";
-            MRD : Opcode_ascii = "MRD ";
-            JAL : Opcode_ascii = "JAL ";
-            JALR: Opcode_ascii = "JALR";
-            BEQ : Opcode_ascii = "BEQ ";
-            BNE : Opcode_ascii = "BNE ";
-            BLT : Opcode_ascii = "BLT ";
-            BGE : Opcode_ascii = "BGE ";
-            default: Opcode_ascii = "????";
+        case (funct)
+            FUNC_SET: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "SETI" : "SETR";
+            FUNC_ADD: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "ADDI" : "ADDR";
+            FUNC_SUB: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "SUBI" : "SUBR";
+            FUNC_AND: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "ANDI" : "ANDR";
+            FUNC_OR:  Opcode_ascii = (opcode == OP_IMMEDIATE) ? "ORI " : "ORR ";
+            FUNC_XOR: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "XORI" : "XORR";
+            FUNC_SLL: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "SLLI" : "SLLR";
+            FUNC_SRL: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "SRLI" : "SRLR";
+            FUNC_SRA: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "SRAI" : "SRAR";
+            FUNC_MWR: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "MWRI" : "MWRR";
+            FUNC_MRD: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "MRDI" : "MRDR";
+            FUNC_JAL: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "JALI" : "JALR";
+            FUNC_BEQ: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "BEQI" : "BEQR";
+            FUNC_BNE: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "BNEI" : "BNER";
+            FUNC_BLT: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "BLTI" : "BLTR";
+            FUNC_BGE: Opcode_ascii = (opcode == OP_IMMEDIATE) ? "BGEI" : "BGER";
+            default:  Opcode_ascii = "????";
         endcase
     endfunction
 
     // Instruction trace: print formatted instruction when prog_step is enabled
+    // New instruction format:
+    // [31:16] immediate/src_1, [15:12] src_2, [11:8] dest, [7:4] opcode, [3:0] funct
     always @(posedge clk) begin
         if (cpu_inst.prog_step) begin
-            case (prog_data[3:0])
-                // I-type: SET, JAL - Rd, Imm
-                SET, JAL: begin
-                    $display("[%0d] : %s R%0d, #%0d", 
-                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[7:4], prog_data[31:12]);
+            case (prog_data[7:4])  // Check opcode
+                OP_IMMEDIATE: begin  // I-Type: uses immediate [31:16]
+                    case (prog_data[3:0])  // Check funct
+                        // Data Transfer: SETI - R[dest] = immediate
+                        FUNC_SET: begin
+                            $display("[%0d] : %s R%0d, #%0d", 
+                                     prog_addr, Opcode_ascii(OP_IMMEDIATE, prog_data[3:0]), 
+                                     prog_data[11:8], $signed(prog_data[31:16]));
+                        end
+                        
+                        // Arithmetic & Logic: ADDI, SUBI, ANDI, ORI, XORI
+                        // R[dest] = R[src_2] op immediate
+                        FUNC_ADD, FUNC_SUB, FUNC_AND, FUNC_OR, FUNC_XOR: begin
+                            $display("[%0d] : %s R%0d, R%0d, #%0d", 
+                                     prog_addr, Opcode_ascii(OP_IMMEDIATE, prog_data[3:0]), 
+                                     prog_data[11:8], prog_data[15:12], $signed(prog_data[31:16]));
+                        end
+                        
+                        // Shift: SLLI, SRLI, SRAI
+                        // R[dest] = R[src_2] op immediate
+                        FUNC_SLL, FUNC_SRL, FUNC_SRA: begin
+                            $display("[%0d] : %s R%0d, R%0d, #%0d", 
+                                     prog_addr, Opcode_ascii(OP_IMMEDIATE, prog_data[3:0]), 
+                                     prog_data[11:8], prog_data[15:12], prog_data[31:16]);
+                        end
+                        
+                        // Memory Write: MWRI - Mem[R[src_2] + immediate] = R[dest]
+                        FUNC_MWR: begin
+                            $display("[%0d] : %s [R%0d + #%0d], R%0d", 
+                                     prog_addr, Opcode_ascii(OP_IMMEDIATE, prog_data[3:0]), 
+                                     prog_data[15:12], $signed(prog_data[31:16]), prog_data[11:8]);
+                        end
+                        
+                        // Memory Read: MRDI - R[dest] = Mem[R[src_2] + immediate]
+                        FUNC_MRD: begin
+                            $display("[%0d] : %s R%0d, [R%0d + #%0d]", 
+                                     prog_addr, Opcode_ascii(OP_IMMEDIATE, prog_data[3:0]), 
+                                     prog_data[11:8], prog_data[15:12], $signed(prog_data[31:16]));
+                        end
+                        
+                        // Jump: JALI - R[dest] = PC + 1; PC = immediate
+                        FUNC_JAL: begin
+                            $display("[%0d] : %s #%0d, R%0d", 
+                                     prog_addr, Opcode_ascii(OP_IMMEDIATE, prog_data[3:0]), 
+                                     prog_data[31:16], prog_data[11:8]);
+                        end
+                        
+                        // Branch: BEQI, BNEI, BLTI, BGEI
+                        // PC = (R[src_2] op R[dest]) ? immediate : PC + 1
+                        FUNC_BEQ, FUNC_BNE, FUNC_BLT, FUNC_BGE: begin
+                            $display("[%0d] : %s #%0d, R%0d, R%0d", 
+                                     prog_addr, Opcode_ascii(OP_IMMEDIATE, prog_data[3:0]), 
+                                     prog_data[31:16], prog_data[15:12], prog_data[11:8]);
+                        end
+                        
+                        default: begin
+                            $display("[%0d] : UNKNOWN FUNCT (0x%08X)", prog_addr, prog_data);
+                        end
+                    endcase
                 end
                 
-                // R-type: ADD, SUB, AND, OR, XOR, SLL, SRL - Rd, Rs2, Rs1
-                ADD, SUB, AND, OR, XOR, SLL, SRL: begin
-                    $display("[%0d] : %s R%0d, R%0d R%0d", 
-                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[7:4], prog_data[11:8], prog_data[15:12]);
-                end
-                
-                // M-type: MWR - [Rs1], Rs2
-                MWR: begin
-                    $display("[%0d] : %s [R%0d], R%0d", 
-                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[15:12], prog_data[11:8]);
-                end
-                
-                // M-type: MRD - Rd, [Rs1]
-                MRD: begin
-                    $display("[%0d] : %s R%0d, [R%0d]", 
-                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[7:4], prog_data[15:12]);
-                end
-                
-                // J-type: JALR - Rd, Rs1
-                JALR: begin
-                    $display("[%0d] : %s R%0d, R%0d", 
-                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[7:4], prog_data[15:12]);
-                end
-                
-                // B-type: BEQ, BNE, BLT, BGE - Rs1, Rs2, Rd (branch if Rs2 op Rd, jump to Rs1)
-                BEQ, BNE, BLT, BGE: begin
-                    $display("[%0d] : %s R%0d, R%0d R%0d", 
-                             prog_addr, Opcode_ascii(prog_data[3:0]), prog_data[15:12], prog_data[11:8], prog_data[7:4]);
+                OP_REGISTER: begin  // R-Type: uses src_1 [19:16]
+                    case (prog_data[3:0])  // Check funct
+                        // Data Transfer: SETR - R[dest] = R[src_1]
+                        FUNC_SET: begin
+                            $display("[%0d] : %s R%0d, R%0d", 
+                                     prog_addr, Opcode_ascii(OP_REGISTER, prog_data[3:0]), 
+                                     prog_data[11:8], prog_data[19:16]);
+                        end
+                        
+                        // Arithmetic & Logic: ADDR, SUBR, ANDR, ORR, XORR
+                        // R[dest] = R[src_2] op R[src_1]
+                        FUNC_ADD, FUNC_SUB, FUNC_AND, FUNC_OR, FUNC_XOR: begin
+                            $display("[%0d] : %s R%0d, R%0d, R%0d", 
+                                     prog_addr, Opcode_ascii(OP_REGISTER, prog_data[3:0]), 
+                                     prog_data[11:8], prog_data[15:12], prog_data[19:16]);
+                        end
+                        
+                        // Shift: SLLR, SRLR, SRAR
+                        // R[dest] = R[src_2] op R[src_1]
+                        FUNC_SLL, FUNC_SRL, FUNC_SRA: begin
+                            $display("[%0d] : %s R%0d, R%0d, R%0d", 
+                                     prog_addr, Opcode_ascii(OP_REGISTER, prog_data[3:0]), 
+                                     prog_data[11:8], prog_data[15:12], prog_data[19:16]);
+                        end
+                        
+                        // Memory Write: MWRR - Mem[R[src_2] + R[src_1]] = R[dest]
+                        FUNC_MWR: begin
+                            $display("[%0d] : %s [R%0d + R%0d], R%0d", 
+                                     prog_addr, Opcode_ascii(OP_REGISTER, prog_data[3:0]), 
+                                     prog_data[15:12], prog_data[19:16], prog_data[11:8]);
+                        end
+                        
+                        // Memory Read: MRDR - R[dest] = Mem[R[src_2] + R[src_1]]
+                        FUNC_MRD: begin
+                            $display("[%0d] : %s R%0d, [R%0d + R%0d]", 
+                                     prog_addr, Opcode_ascii(OP_REGISTER, prog_data[3:0]), 
+                                     prog_data[11:8], prog_data[15:12], prog_data[19:16]);
+                        end
+                        
+                        // Jump: JALR - R[dest] = PC + 1; PC = R[src_1]
+                        FUNC_JAL: begin
+                            $display("[%0d] : %s R%0d, R%0d", 
+                                     prog_addr, Opcode_ascii(OP_REGISTER, prog_data[3:0]), 
+                                     prog_data[19:16], prog_data[11:8]);
+                        end
+                        
+                        // Branch: BEQR, BNER, BLTR, BGER
+                        // PC = (R[src_2] op R[dest]) ? R[src_1] : PC + 1
+                        FUNC_BEQ, FUNC_BNE, FUNC_BLT, FUNC_BGE: begin
+                            $display("[%0d] : %s R%0d, R%0d, R%0d", 
+                                     prog_addr, Opcode_ascii(OP_REGISTER, prog_data[3:0]), 
+                                     prog_data[19:16], prog_data[15:12], prog_data[11:8]);
+                        end
+                        
+                        default: begin
+                            $display("[%0d] : UNKNOWN FUNCT (0x%08X)", prog_addr, prog_data);
+                        end
+                    endcase
                 end
                 
                 default: begin
@@ -189,7 +285,7 @@ module simple_cpu_tb();
     );
 
     // Instantiate Program Memory (ROM)
-    hello_world rom_inst (
+    test_rom rom_inst (
         .prog_addr      (prog_addr),
         .prog_data      (prog_data)
     );
