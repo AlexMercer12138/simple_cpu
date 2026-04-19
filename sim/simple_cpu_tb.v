@@ -56,6 +56,9 @@ module simple_cpu_tb();
     // Signals for CPU connection
     wire [7:0]  prog_addr;
     wire [31:0] prog_data;
+
+    // Monitor data at address 0x00
+    wire [31:0] monitor;
     
     // AXI4-Lite interface signals (CPU master -> Slave)
     wire        m_axi_awvalid;
@@ -186,11 +189,6 @@ module simple_cpu_tb();
     );
 
     // Instantiate Program Memory (ROM)
-    // instr_test rom_inst (
-    //     .prog_addr      (prog_addr),
-    //     .prog_data      (prog_data)
-    // );
-
     hello_world rom_inst (
         .prog_addr      (prog_addr),
         .prog_data      (prog_data)
@@ -203,6 +201,8 @@ module simple_cpu_tb();
     ) s_axi_inst (
         .S_AXI_ACLK     (clk),
         .S_AXI_ARESETN  (rst_n),
+
+        .monitor        (monitor),
         
         // Write Address Channel
         .S_AXI_AWADDR   (m_axi_awaddr[5:0]),

@@ -32,19 +32,31 @@
 
 ```
 CPU/
-├── rtl/
-│   └── simple_cpu.v              # CPU核心代码
+├── rtl/                          # RTL源代码
+│   ├── simple_cpu.v              # CPU核心代码 - 32位RISC处理器实现
+│   ├── s_axi_lite.v              # AXI4-Lite从机接口模块 - 用于外设寄存器访问
+│   └── hello_world.v             # Hello World程序存储器初始化模块
 ├── assembler/                    # 汇编器
-│   ├── assembler.py              # 汇编器主程序
-│   ├── sass-vscode-extension/    # VSCode插件
-│   │   ├── package.json
-│   │   ├── syntaxes/
-│   │   ├── snippets/
-│   │   └── language-configuration/
-│   ├── setup.py                  # 安装脚本
-│   └── README.md                 # 汇编器使用说明
-├── README.md                     # 项目介绍
-└── ISA.md                        # 指令集参考
+│   ├── assembler.py              # 汇编器主程序 - 将汇编转换为机器码
+│   ├── pyproject.toml            # Python包配置 - 支持pip安装
+│   ├── install.bat               # Windows安装脚本 - 一键安装汇编器
+│   ├── uninstall.bat             # Windows卸载脚本
+│   ├── README.md                 # 汇编器使用说明
+│   └── sass-vscode-extension/    # VSCode插件
+│       ├── package.json          # 插件配置
+│       ├── syntaxes/             # 语法高亮定义
+│       ├── snippets/             # 代码片段
+│       ├── language-configuration/   # 语言配置
+│       └── example.asm           # 示例汇编程序
+├── sim/                          # 仿真测试
+│   └── simple_cpu_tb.v           # CPU测试平台 - 带指令追踪功能
+├── example/                      # 示例程序
+│   ├── hello_world.asm           # Hello World滑动窗口演示程序
+│   └── inst_test.asm             # 全指令集测试程序
+├── ISA.md                        # 指令集参考文档
+├── LICENSE                       # MIT许可证
+├── .gitignore                    # Git忽略规则
+└── README.md                     # 项目介绍
 ```
 
 ### 端口说明

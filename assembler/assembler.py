@@ -15,23 +15,23 @@ from enum import Enum, auto
 
 
 class InstructionType(Enum):
-    """指令类型"""
-    SET = 0x0   # MOV Rd, #imm
-    ADD = 0x1   # MOV Rd, Rs2 + Rs1
-    SUB = 0x2   # MOV Rd, Rs2 - Rs1
-    AND = 0x3   # MOV Rd, Rs2 & Rs1
-    OR = 0x4    # MOV Rd, Rs2 | Rs1
-    XOR = 0x5   # MOV Rd, Rs2 ^ Rs1
-    SLL = 0x6   # MOV Rd, Rs2 << Rs1
-    SRL = 0x7   # MOV Rd, Rs2 >> Rs1
-    MWR = 0x8   # MOV [Rs1], Rs2
-    MRD = 0x9   # MOV Rd, [Rs1]
-    JAL = 0xA   # JMP Rd, #imm
-    JALR = 0xB  # JMP Rd, Rs1
-    BEQ = 0xC   # BRC Rs1, Rs2 == Rd
-    BNE = 0xD   # BRC Rs1, Rs2 != Rd
-    BLT = 0xE   # BRC Rs1, Rs2 < Rd
-    BGE = 0xF   # BRC Rs1, Rs2 >= Rd
+    """指令类型 - 对应16个功能码"""
+    SET = 0x0   # MOV Rd, #imm / MOV Rd, Rs
+    ADD = 0x1   # MOV Rd, Rs2 + Rs1 / MOV Rd, Rs + #imm
+    SUB = 0x2   # MOV Rd, Rs2 - Rs1 / MOV Rd, Rs - #imm
+    AND = 0x3   # MOV Rd, Rs2 & Rs1 / MOV Rd, Rs & #imm
+    OR = 0x4    # MOV Rd, Rs2 | Rs1 / MOV Rd, Rs | #imm
+    XOR = 0x5   # MOV Rd, Rs2 ^ Rs1 / MOV Rd, Rs ^ #imm
+    SLL = 0x6   # MOV Rd, Rs2 << Rs1 / MOV Rd, Rs << #imm
+    SRL = 0x7   # MOV Rd, Rs2 >> Rs1 / MOV Rd, Rs >> #imm
+    SRA = 0x8   # MOV Rd, Rs2 >>> Rs1 / MOV Rd, Rs >>> #imm (算术右移)
+    MWR = 0x9   # MOV [Rs1 + Rs2], Rd / MOV [Rs + #imm], Rd (内存写)
+    MRD = 0xA   # MOV Rd, [Rs1 + Rs2] / MOV Rd, [Rs + #imm] (内存读)
+    JAL = 0xB   # JMP #imm/label, Rd / JMP Rs, Rd
+    BEQ = 0xC   # BRC #imm/Rs, Rd2 == Rd1
+    BNE = 0xD   # BRC #imm/Rs, Rd2 != Rd1
+    BLT = 0xE   # BRC #imm/Rs, Rd2 < Rd1 (有符号)
+    BGE = 0xF   # BRC #imm/Rs, Rd2 >= Rd1 (有符号)
 
 
 @dataclass
@@ -46,9 +46,12 @@ class Instruction:
 @dataclass
 class ParsedLine:
     """解析后的行"""
-    label: Optional[str] = None
-    instruction: Optional[Instruction] = None
-    line_content: str = ""  # 原始行内容（用于调试）
+    def __init__(self, label: Optional[str] = None, 
+                 instruction: Optional[Instruction] = None, 
+                 line_content: str = ""):
+        self.label = label
+        self.instruction = instruction
+        self.line_content = line_content  # 原始行内容（用于调试）
 
 
 class SimpleCPUAssembler:
@@ -60,31 +63,11 @@ class SimpleCPUAssembler:
         self.errors: List[str] = []            # 错误列表
 
     def remove_comments(self, line: str) -> str:
-        """移除注释（支持 # 和 ;）
-        注意：#号在字符串中或作为立即数前缀时不是注释
-        """
-        # 先处理 ; 注释
-        if ';' in line:
-            line = line[:line.index(';')]
-
-        # 处理 # 注释，但需要排除立即数 #xxx
-        # 立即数格式: #数字 或 #0x 或 #0b
-        result = []
-        i = 0
-        while i < len(line):
-            c = line[i]
-            if c == '#':
-                # 检查是否是立即数
-                if i + 1 < len(line) and (line[i+1].isdigit() or line[i+1] in 'xXbB'):
-                    result.append(c)
-                else:
-                    # 这是注释
-                    break
-            else:
-                result.append(c)
-            i += 1
-
-        return ''.join(result).strip()
+        """移除注释（只支持 // 格式）"""
+        # 查找 // 注释
+        if '//' in line:
+            line = line[:line.index('//')]
+        return line.strip()
 
     def extract_label(self, line: str) -> Tuple[Optional[str], str]:
         """提取标签，返回 (标签名, 剩余代码)"""
@@ -93,6 +76,17 @@ class SimpleCPUAssembler:
         if match:
             return match.group(1), match.group(2).strip()
         return None, line
+
+    def is_valid_register(self, reg_str: str) -> bool:
+        """检查字符串是否是有效的寄存器名 (R0-R15)"""
+        reg_str = reg_str.strip().upper()
+        if not reg_str.startswith('R'):
+            return False
+        try:
+            reg_num = int(reg_str[1:])
+            return 0 <= reg_num <= 15
+        except ValueError:
+            return False
 
     def parse_register(self, reg_str: str) -> int:
         """解析寄存器字符串，返回寄存器编号 (0-15)"""
@@ -109,8 +103,12 @@ class SimpleCPUAssembler:
                 raise ValueError(f"无效的寄存器: {reg_str}")
         raise ValueError(f"无效的寄存器格式: {reg_str} (应为 Rx)")
 
-    def parse_immediate(self, imm_str: str, bits: int = 20) -> int:
-        """解析立即数字符串，返回整数值"""
+    def parse_immediate(self, imm_str: str, bits: int = 16) -> int:
+        """解析立即数字符串，返回整数值
+        
+        十六进制(0x)和二进制(0b)按无符号数处理，范围 0x0000-0xFFFF
+        十进制按有符号数处理，范围 -32768 到 32767
+        """
         imm_str = imm_str.strip()
 
         # 检查是否为 # 开头的立即数
@@ -119,20 +117,31 @@ class SimpleCPUAssembler:
 
         try:
             # 支持不同进制
-            if imm_str.lower().startswith('0x'):
+            is_hex = imm_str.lower().startswith('0x')
+            is_bin = imm_str.lower().startswith('0b')
+            
+            if is_hex:
                 value = int(imm_str, 16)
-            elif imm_str.lower().startswith('0b'):
+            elif is_bin:
                 value = int(imm_str, 2)
             else:
                 value = int(imm_str)
 
-            # 检查范围（20位有符号数: -524288 到 524287）
-            max_val = (1 << (bits - 1)) - 1
-            min_val = -(1 << (bits - 1))
-            if not (min_val <= value <= max_val):
-                raise ValueError(f"立即数越界: {value} (应在 {min_val} 到 {max_val} 之间)")
+            # 检查范围
+            if is_hex or is_bin:
+                # 十六进制和二进制按无符号数处理: 0 到 65535 (0x0000-0xFFFF)
+                max_val = (1 << bits) - 1  # 65535
+                min_val = 0
+                if not (min_val <= value <= max_val):
+                    raise ValueError(f"立即数越界: {value} (应在 0x0000 到 0x{max_val:04X} 之间)")
+            else:
+                # 十进制按有符号数处理: -32768 到 32767
+                max_val = (1 << (bits - 1)) - 1  # 32767
+                min_val = -(1 << (bits - 1))     # -32768
+                if not (min_val <= value <= max_val):
+                    raise ValueError(f"立即数越界: {value} (应在 {min_val} 到 {max_val} 之间)")
 
-            # 转换为无符号表示（用于编码）
+            # 转换为无符号表示（用于编码）- 16位补码表示
             if value < 0:
                 value = value & ((1 << bits) - 1)
 
@@ -167,7 +176,7 @@ class SimpleCPUAssembler:
                     current = ""
                     i += 2
                     continue
-            # 检查移位运算符 << >>
+            # 检查移位运算符 << >> >>>
             if c in '<' and i + 1 < len(operand_str) and operand_str[i+1] == '<':
                 if current.strip():
                     tokens.append(current.strip())
@@ -175,19 +184,55 @@ class SimpleCPUAssembler:
                 current = ""
                 i += 2
                 continue
+            if c in '>' and i + 2 < len(operand_str) and operand_str[i+1] == '>' and operand_str[i+2] == '>':
+                # 算术右移 >>>
+                if current.strip():
+                    tokens.append(current.strip())
+                tokens.append('>>>')
+                current = ""
+                i += 3
+                continue
             if c in '>' and i + 1 < len(operand_str) and operand_str[i+1] == '>':
+                # 逻辑右移 >>
                 if current.strip():
                     tokens.append(current.strip())
                 tokens.append('>>')
                 current = ""
                 i += 2
                 continue
-            # 单字符分隔符
-            if c in '[]()+-&|^':
+            # 处理立即数（带符号）#-123 或 #+123
+            if c == '#' and i + 1 < len(operand_str) and operand_str[i+1] in '+-':
+                # 这是一个带符号的立即数开始，收集完整的立即数
+                if current.strip():
+                    tokens.append(current.strip())
+                    current = ""
+                current += c  # 添加 #
+                i += 1
+                current += operand_str[i]  # 添加 + 或 -
+                i += 1
+                # 继续收集数字
+                while i < len(operand_str) and (operand_str[i].isalnum() or operand_str[i] in 'xXbB'):
+                    current += operand_str[i]
+                    i += 1
+                tokens.append(current)
+                current = ""
+                continue
+            # 单字符分隔符（但跳过立即数中的+-）
+            if c in '[]()&|^':
                 if current.strip():
                     tokens.append(current.strip())
                 tokens.append(c)
                 current = ""
+                i += 1
+                continue
+            # 处理加减运算符（需要区分是运算符还是立即数符号）
+            if c in '+-':
+                # 如果current为空或current以操作符结尾，这可能是立即数的一部分
+                # 否则这是一个运算符
+                if current.strip():
+                    tokens.append(current.strip())
+                    current = ""
+                tokens.append(c)
                 i += 1
                 continue
             current += c
@@ -197,30 +242,68 @@ class SimpleCPUAssembler:
         return tokens
 
     def parse_mov(self, operands: List[str], line_num: int, line_content: str) -> Instruction:
-        """解析MOV指令
+        """解析MOV指令 - 完整支持I-Type和R-Type
 
-        MOV Rd, #imm          -> SET
-        MOV Rd, Rs            -> 简写: MOV Rd, Rs + R0
-        MOV Rd, Rs2 + Rs1     -> ADD
-        MOV Rd, Rs2 - Rs1     -> SUB
-        MOV Rd, Rs2 & Rs1     -> AND
-        MOV Rd, Rs2 | Rs1     -> OR
-        MOV Rd, Rs2 ^ Rs1     -> XOR
-        MOV Rd, Rs2 << Rs1    -> SLL
-        MOV Rd, Rs2 >> Rs1    -> SRL
-        MOV Rd, [Rs]          -> MRD
-        MOV [Rs1], Rs2        -> MWR
+        I-Type (立即数操作):
+        MOV Rd, #imm              -> SET
+        MOV Rd, Rs + #imm         -> ADD
+        MOV Rd, Rs - #imm         -> SUB
+        MOV Rd, Rs & #imm         -> AND
+        MOV Rd, Rs | #imm         -> OR
+        MOV Rd, Rs ^ #imm         -> XOR
+        MOV Rd, Rs << #imm        -> SLL
+        MOV Rd, Rs >> #imm        -> SRL
+        MOV Rd, Rs >>> #imm       -> SRA
+        MOV Rd, [Rs + #imm]       -> MRD
+        MOV [Rs + #imm], Rd       -> MWR
+
+        R-Type (寄存器操作):
+        MOV Rd, Rs                -> SET (简写: MOV Rd, Rs + R0)
+        MOV Rd, Rs2 + Rs1         -> ADD
+        MOV Rd, Rs2 - Rs1         -> SUB
+        MOV Rd, Rs2 & Rs1         -> AND
+        MOV Rd, Rs2 | Rs1         -> OR
+        MOV Rd, Rs2 ^ Rs1         -> XOR
+        MOV Rd, Rs2 << Rs1        -> SLL
+        MOV Rd, Rs2 >> Rs1        -> SRL
+        MOV Rd, Rs2 >>> Rs1       -> SRA
+        MOV Rd, [Rs]              -> MRD (偏移为0，即 [Rs + R0])
+        MOV Rd, [Rs1 + Rs2]       -> MRD
+        MOV [Rs], Rd              -> MWR (偏移为0，即 [Rs + R0])
+        MOV [Rs1 + Rs2], Rd       -> MWR
         """
         if len(operands) < 1:
             raise ValueError("MOV指令需要操作数")
 
-        # 检查是否为内存写操作: MOV [Rs1], Rs2
+        # 检查是否为内存写操作: MOV [addr], Rd
         first_op = operands[0].strip()
         if first_op.startswith('['):
-            # 内存写 - operands[0] = "[Rs1]", operands[1] = "Rs2"
-            if len(operands) != 2:
-                raise ValueError("MOV内存写格式错误，应为: MOV [Rs1], Rs2")
-            return Instruction(InstructionType.MWR, [operands[0], operands[1]], line_num, line_content)
+            # 解析内存地址
+            addr_str = first_op
+            data_reg = operands[1].strip() if len(operands) > 1 else None
+            if not data_reg:
+                raise ValueError("MOV内存写需要数据寄存器: MOV [addr], Rd")
+            
+            # 解析地址表达式 [base + offset]
+            addr_tokens = self.tokenize_operands(addr_str)
+            # 去掉 '[' 和 ']'
+            if addr_tokens[0] == '[':
+                addr_tokens = addr_tokens[1:]
+            if addr_tokens[-1] == ']':
+                addr_tokens = addr_tokens[:-1]
+            
+            # 格式: [Rs] 或 [Rs + #imm] 或 [Rs + Rt]
+            if len(addr_tokens) == 1:
+                # [Rs] - 偏移为0，使用R0
+                base_reg = addr_tokens[0]
+                return Instruction(InstructionType.MWR, [f"[{base_reg}]", data_reg, 'R0'], line_num, line_content)
+            elif len(addr_tokens) == 3 and addr_tokens[1] == '+':
+                # [Rs + offset]
+                base_reg = addr_tokens[0]
+                offset = addr_tokens[2]
+                return Instruction(InstructionType.MWR, [f"[{base_reg}]", data_reg, offset], line_num, line_content)
+            else:
+                raise ValueError(f"无效的内存地址格式: {addr_str}")
 
         # 检查是否有至少2个操作数 (dest, src)
         if len(operands) < 2:
@@ -238,52 +321,84 @@ class SimpleCPUAssembler:
 
         # 检查是否为单寄存器: MOV Rd, Rs (简化为 ADD Rd, Rs, R0)
         if len(tokens) == 1 and tokens[0].upper().startswith('R'):
-            return Instruction(InstructionType.ADD, [dest_reg, tokens[0], 'R0'], line_num, line_content)
+            return Instruction(InstructionType.ADD, [dest_reg, tokens[0], '#0'], line_num, line_content)
 
-        # 检查是否为内存读: MOV Rd, [Rs]
-        if len(tokens) == 3 and tokens[0] == '[' and tokens[2] == ']':
-            return Instruction(InstructionType.MRD, [dest_reg, tokens[1]], line_num, line_content)
+        # 检查是否为内存读: MOV Rd, [addr]
+        if len(tokens) >= 3 and tokens[0] == '[':
+            # 去掉 '[' 和 ']'
+            if tokens[-1] == ']':
+                tokens = tokens[1:-1]
+            else:
+                tokens = tokens[1:]
+            
+            # 格式: [Rs] 或 [Rs + #imm] 或 [Rs + Rt]
+            if len(tokens) == 1:
+                # [Rs] - 偏移为0
+                base_reg = tokens[0]
+                return Instruction(InstructionType.MRD, [dest_reg, base_reg, '#0'], line_num, line_content)
+            elif len(tokens) == 3 and tokens[1] == '+':
+                # [Rs + offset]
+                base_reg = tokens[0]
+                offset = tokens[2]
+                return Instruction(InstructionType.MRD, [dest_reg, base_reg, offset], line_num, line_content)
+            else:
+                raise ValueError(f"无效的内存地址格式: {src_str}")
 
-        # 检查算术/逻辑运算
+        # 检查算术/逻辑运算 - 支持寄存器和立即数两种形式
+        # 格式: Rs2 op Rs1 或 Rs op #imm
         if len(tokens) == 3:
-            rs2, op, rs1 = tokens
-            op_map = {
-                '+': InstructionType.ADD,
-                '-': InstructionType.SUB,
-                '&': InstructionType.AND,
-                '|': InstructionType.OR,
-                '^': InstructionType.XOR,
-                '<<': InstructionType.SLL,
-                '>>': InstructionType.SRL,
-            }
-            if op in op_map:
-                return Instruction(op_map[op], [dest_reg, rs2, rs1], line_num, line_content)
+            rs2, op, rs1_or_imm = tokens
+            
+            # 判断是R-Type还是I-Type
+            if rs1_or_imm.startswith('#'):
+                # I-Type: Rs op #imm
+                op_map_i = {
+                    '+': InstructionType.ADD,
+                    '-': InstructionType.SUB,
+                    '&': InstructionType.AND,
+                    '|': InstructionType.OR,
+                    '^': InstructionType.XOR,
+                    '<<': InstructionType.SLL,
+                    '>>': InstructionType.SRL,
+                    '>>>': InstructionType.SRA,
+                }
+                if op in op_map_i:
+                    return Instruction(op_map_i[op], [dest_reg, rs2, rs1_or_imm], line_num, line_content)
+            else:
+                # R-Type: Rs2 op Rs1
+                op_map_r = {
+                    '+': InstructionType.ADD,
+                    '-': InstructionType.SUB,
+                    '&': InstructionType.AND,
+                    '|': InstructionType.OR,
+                    '^': InstructionType.XOR,
+                    '<<': InstructionType.SLL,
+                    '>>': InstructionType.SRL,
+                    '>>>': InstructionType.SRA,
+                }
+                if op in op_map_r:
+                    return Instruction(op_map_r[op], [dest_reg, rs2, rs1_or_imm], line_num, line_content)
 
         raise ValueError(f"无法识别的MOV格式: {src_str}")
 
     def parse_jmp(self, operands: List[str], line_num: int, line_content: str) -> Instruction:
-        """解析JMP指令
-
-        JMP Rd, #imm          -> JAL
-        JMP Rd, label         -> JAL (标签)
-        JMP Rd, Rs            -> JALR
+        """解析JMP指令 - 支持I-Type和R-Type
+        
+        语法: JMP target, Rd    (与BRC指令结构保持一致)
+        
+        JMP #imm, Rd          -> JAL (I-Type): Rd = PC+1, PC = imm
+        JMP label, Rd         -> JAL (I-Type): Rd = PC+1, PC = label
+        JMP Rs, Rd            -> JAL (R-Type): Rd = PC+1, PC = Rs
         """
         if len(operands) != 2:
-            raise ValueError("JMP指令需要2个操作数: JMP Rd, target")
+            raise ValueError("JMP指令需要2个操作数: JMP target, Rd")
 
-        dest_reg = operands[0]
-        target = operands[1]
+        target = operands[0]
+        dest_reg = operands[1]
 
-        # 检查是否为立即数
-        if target.startswith('#'):
-            return Instruction(InstructionType.JAL, [dest_reg, target], line_num, line_content)
-
-        # 检查是否为寄存器
-        if target.upper().startswith('R'):
-            return Instruction(InstructionType.JALR, [dest_reg, target], line_num, line_content)
-
-        # 否则认为是标签
-        return Instruction(InstructionType.JAL, [dest_reg, target], line_num, line_content)
+        # JAL 指令支持立即数、标签和寄存器三种形式
+        # 编码时根据操作数类型决定是I-Type还是R-Type
+        return Instruction(InstructionType.JAL, [target, dest_reg], line_num, line_content)
 
     def parse_brc(self, operands: List[str], line_num: int, line_content: str) -> Instruction:
         """解析BRC指令
@@ -378,9 +493,7 @@ class SimpleCPUAssembler:
     def _is_brc_with_label(self, inst: Instruction) -> bool:
         """检查BRC指令是否使用标签作为跳转目标
         
-        BRC指令使用标签时需要展开为两条指令：
-        SET Rtemp, #label_addr
-        BRC Rtemp, cond
+        BRC指令现在支持立即数跳转，使用标签时直接汇编为立即数分支
         """
         if inst.inst_type not in [InstructionType.BEQ, InstructionType.BNE,
                                   InstructionType.BLT, InstructionType.BGE]:
@@ -396,225 +509,348 @@ class SimpleCPUAssembler:
         return not is_register and not is_immediate
 
     def encode_instruction(self, inst: Instruction, current_addr: int) -> int:
-        """将指令编码为32位机器码"""
+        """将指令编码为32位机器码
+        
+        指令格式 (32位):
+        [31:16] immediate/src_1 (16位)
+        [15:12] src_2 (4位)
+        [11:8]  dest (4位)
+        [7:4]   opcode (4位) - 0001=I-Type, 0010=R-Type
+        [3:0]   funct (4位)
+        """
         inst_type = inst.inst_type
         ops = inst.operands
+        
+        # opcode 和 funct 组合
+        # I-Type (立即数): opcode = 0001 = 0x1
+        # R-Type (寄存器): opcode = 0010 = 0x2
+        OPCODE_I = 0x1
+        OPCODE_R = 0x2
 
-        # SET: MOV Rd, #imm
+        # SET: MOV Rd, #imm (I-Type)
         if inst_type == InstructionType.SET:
             rd = self.parse_register(ops[0])
-            imm = self.parse_immediate(ops[1], 20)
-            return (imm << 12) | (rd << 4) | inst_type.value
+            imm = self.parse_immediate(ops[1], 16)  # 16位有符号立即数
+            # 格式: imm[15:0] | 0000 | rd[3:0] | 0001 | funct
+            return (imm << 16) | (rd << 8) | (OPCODE_I << 4) | inst_type.value
 
-        # ADD, SUB, AND, OR, XOR, SLL, SRL: MOV Rd, Rs2 op Rs1
+        # ADD, SUB, AND, OR, XOR, SLL, SRL, SRA: 支持I-Type和R-Type
         elif inst_type in [InstructionType.ADD, InstructionType.SUB, InstructionType.AND,
                           InstructionType.OR, InstructionType.XOR, InstructionType.SLL,
-                          InstructionType.SRL]:
+                          InstructionType.SRL, InstructionType.SRA]:
             rd = self.parse_register(ops[0])
             rs2 = self.parse_register(ops[1])
-            rs1 = self.parse_register(ops[2])
-            return (rs1 << 12) | (rs2 << 8) | (rd << 4) | inst_type.value
+            third_op = ops[2]
+            
+            # 判断是I-Type还是R-Type
+            if third_op.startswith('#'):
+                # I-Type: Rs op #imm
+                imm = self.parse_immediate(third_op, 16)
+                # 格式: imm[15:0] | rs2[3:0] | rd[3:0] | 0001 | funct
+                return (imm << 16) | (rs2 << 12) | (rd << 8) | (OPCODE_I << 4) | inst_type.value
+            else:
+                # R-Type: Rs2 op Rs1
+                rs1 = self.parse_register(third_op)
+                # 格式: rs1[3:0] | rs2[3:0] | rd[3:0] | 0010 | funct
+                return (rs1 << 16) | (rs2 << 12) | (rd << 8) | (OPCODE_R << 4) | inst_type.value
 
-        # MWR: MOV [Rs1], Rs2
-        # ops[0] = "[Rs1]", ops[1] = "Rs2"
+        # MWR: 内存写 - 支持 [Rs + #imm] (I-Type) 和 [Rs1 + Rs2] (R-Type)
+        # ops: [base_reg_str], data_reg, offset
         elif inst_type == InstructionType.MWR:
-            # 从 "[Rs1]" 中提取 Rs1
-            rs1_str = ops[0].strip()
-            if rs1_str.startswith('[') and rs1_str.endswith(']'):
-                rs1_str = rs1_str[1:-1]
-            rs1 = self.parse_register(rs1_str)
-            rs2 = self.parse_register(ops[1])
-            return (rs1 << 12) | (rs2 << 8) | (0 << 4) | inst_type.value
+            # 从 "[Rs]" 中提取基址寄存器
+            base_str = ops[0].strip()
+            if base_str.startswith('[') and base_str.endswith(']'):
+                base_str = base_str[1:-1]
+            rs_base = self.parse_register(base_str)
+            
+            # 数据寄存器
+            data_reg_str = ops[1]
+            rd = self.parse_register(data_reg_str)
+            
+            # 偏移
+            offset_str = ops[2] if len(ops) > 2 else '#0'
+            
+            if offset_str.startswith('#'):
+                # I-Type: [Rs + #imm]
+                imm = self.parse_immediate(offset_str, 16)
+                # 格式: imm[15:0] | rs_base[3:0] | rd[3:0] | 0001 | funct
+                return (imm << 16) | (rs_base << 12) | (rd << 8) | (OPCODE_I << 4) | inst_type.value
+            else:
+                # R-Type: [Rs1 + Rs2]
+                rs_offset = self.parse_register(offset_str)
+                # 格式: rs_offset[3:0] | rs_base[3:0] | rd[3:0] | 0010 | funct
+                return (rs_offset << 16) | (rs_base << 12) | (rd << 8) | (OPCODE_R << 4) | inst_type.value
 
-        # MRD: MOV Rd, [Rs1]
-        # ops[0] = "Rd", ops[1] = "Rs1" (已经去掉方括号)
+        # MRD: 内存读 - 支持 [Rs + #imm] (I-Type) 和 [Rs1 + Rs2] (R-Type)
+        # ops: dest_reg, base_reg, offset
         elif inst_type == InstructionType.MRD:
             rd = self.parse_register(ops[0])
-            rs1 = self.parse_register(ops[1])
-            return (rs1 << 12) | (0 << 8) | (rd << 4) | inst_type.value
-
-        # JAL: JMP Rd, #imm 或 JMP Rd, label
-        elif inst_type == InstructionType.JAL:
-            rd = self.parse_register(ops[0])
-            target = ops[1]
-
-            # 处理标签
-            if target.startswith('#'):
-                imm = self.parse_immediate(target, 20)
-            elif target.upper().startswith('R'):
-                raise ValueError("JAL需要立即数或标签，但得到寄存器")
+            rs_base = self.parse_register(ops[1])
+            
+            # 偏移
+            offset_str = ops[2] if len(ops) > 2 else '#0'
+            
+            if offset_str.startswith('#'):
+                # I-Type: [Rs + #imm]
+                imm = self.parse_immediate(offset_str, 16)
+                # 格式: imm[15:0] | rs_base[3:0] | rd[3:0] | 0001 | funct
+                return (imm << 16) | (rs_base << 12) | (rd << 8) | (OPCODE_I << 4) | inst_type.value
             else:
-                # 标签
-                if target not in self.symbols:
-                    raise ValueError(f"未定义的标签: {target}")
-                imm = self.symbols[target]
-            return (imm << 12) | (rd << 4) | inst_type.value
+                # R-Type: [Rs1 + Rs2]
+                rs_offset = self.parse_register(offset_str)
+                # 格式: rs_offset[3:0] | rs_base[3:0] | rd[3:0] | 0010 | funct
+                return (rs_offset << 16) | (rs_base << 12) | (rd << 8) | (OPCODE_R << 4) | inst_type.value
 
-        # JALR: JMP Rd, Rs1
-        elif inst_type == InstructionType.JALR:
-            rd = self.parse_register(ops[0])
-            rs1 = self.parse_register(ops[1])
-            return (rs1 << 12) | (0 << 8) | (rd << 4) | inst_type.value
+        # JAL: JMP target, Rd (I-Type或R-Type)
+        # ops[0] = target (#imm, label, 或 Rs)
+        # ops[1] = Rd (链接寄存器)
+        elif inst_type == InstructionType.JAL:
+            target = ops[0]
+            rd = self.parse_register(ops[1])
 
-        # BEQ, BNE, BLT, BGE: BRC Rs, Rd2 op Rd1
-        # 注意：经过assemble方法处理后，target已经是寄存器
+            # 判断是I-Type还是R-Type（标签已预处理为立即数）
+            if target.startswith('#'):
+                # I-Type: 立即数跳转
+                imm = self.parse_immediate(target, 16)  # 16位有符号立即数
+                # 格式: imm[15:0] | 0000 | rd[3:0] | 0001 | funct
+                return (imm << 16) | (rd << 8) | (OPCODE_I << 4) | inst_type.value
+            elif self.is_valid_register(target):
+                # R-Type: 寄存器跳转
+                rs1 = self.parse_register(target)
+                # 格式: rs1[3:0] | 0000 | rd[3:0] | 0010 | funct
+                return (rs1 << 16) | (rd << 8) | (OPCODE_R << 4) | inst_type.value
+            else:
+                raise ValueError(f"无效的跳转目标: {target} (应为#立即数或寄存器)")
+
+        # BEQ, BNE, BLT, BGE: BRC target, Rd2 op Rd1
+        # 支持两种模式:
+        # - I-Type: BRC #imm/label, cond (立即数跳转)
+        # - R-Type: BRC Rs, cond (寄存器跳转)
         elif inst_type in [InstructionType.BEQ, InstructionType.BNE,
                           InstructionType.BLT, InstructionType.BGE]:
             target = ops[0]
             rs2 = self.parse_register(ops[1])
             rd = self.parse_register(ops[2])
 
-            # 处理跳转目标（必须是寄存器）
-            if target.upper().startswith('R'):
+            # 判断是立即数跳转(I-Type)还是寄存器跳转(R-Type)（标签已预处理为立即数）
+            if target.startswith('#'):
+                # I-Type: 立即数跳转
+                imm = self.parse_immediate(target, 16)
+                # 格式: imm[15:0] | rs2[3:0] | rd[3:0] | 0001 | funct
+                return (imm << 16) | (rs2 << 12) | (rd << 8) | (OPCODE_I << 4) | inst_type.value
+            elif self.is_valid_register(target):
+                # R-Type: 寄存器跳转
                 rs1 = self.parse_register(target)
+                # 格式: rs1[3:0] | rs2[3:0] | rd[3:0] | 0010 | funct
+                return (rs1 << 16) | (rs2 << 12) | (rd << 8) | (OPCODE_R << 4) | inst_type.value
             else:
-                raise ValueError(f"BRC指令目标必须是寄存器，得到: {target}")
-
-            return (rs1 << 12) | (rs2 << 8) | (rd << 4) | inst_type.value
+                raise ValueError(f"无效的分支目标: {target} (应为#立即数或寄存器)")
 
         else:
             raise ValueError(f"未实现的指令类型: {inst_type}")
 
-    def assemble(self, source_code: str) -> tuple[List[int], str, str]:
+    def replace_labels(self, line: str) -> str:
+        """将行中的标签替换为 #立即数"""
+        # 去注释
+        line_no_comment = self.remove_comments(line)
+        if not line_no_comment:
+            return line
+        
+        # 提取标签部分
+        label_match = re.match(r'^([a-zA-Z_][a-zA-Z0-9_]*)[:：]\s*(.*)', line_no_comment)
+        if label_match:
+            label_part = label_match.group(1) + ':'
+            code_part = label_match.group(2)
+        else:
+            label_part = ""
+            code_part = line_no_comment
+        
+        if not code_part.strip():
+            return line_no_comment
+        
+        # 提取指令和操作数
+        parts = code_part.split(None, 1)
+        if len(parts) == 0:
+            return line_no_comment
+        
+        mnemonic = parts[0].upper()
+        operands_str = parts[1] if len(parts) > 1 else ""
+        
+        # 替换操作数中的标签
+        new_operands = []
+        # 按逗号分割操作数
+        raw_operands = [op.strip() for op in operands_str.split(',')]
+        
+        for op in raw_operands:
+            if not op:
+                continue
+            
+            # 检查是否是标签（不是立即数，不是寄存器，但在符号表中）
+            if op.startswith('#'):
+                # 立即数，保持不变
+                new_operands.append(op)
+            elif self.is_valid_register(op):
+                # 寄存器，保持不变
+                new_operands.append(op)
+            elif op in self.symbols:
+                # 标签，替换为 #立即数
+                addr = self.symbols[op]
+                new_operands.append(f"#{addr}")
+            else:
+                # 不是标签，保持不变（可能是错误，后续语法分析会报）
+                new_operands.append(op)
+        
+        # 重组指令
+        new_line = label_part + " " + mnemonic + " " + ", ".join(new_operands)
+        return new_line.strip()
+
+    def assemble(self, source_code: str) -> tuple[List[int], str, str, str]:
         """汇编源代码，返回机器码列表及调试信息
         
-        支持标签跳转的双指令展开：
-        - JMP label: 直接使用JAL（支持20位立即数）
-        - BRC label, cond: 展开为 SET R15, #label_addr + BRC R15, cond
+        处理流程：
+        1. 第一遍：收集所有标签，建立符号表
+        2. 第二遍：替换所有标签为立即数 (#addr)
+        3. 第三遍：解析指令并生成机器码
         
-        返回: (机器码列表, 去注释带行号的代码, 标签表文本)
+        返回: (机器码列表, 去注释带行号的代码, 标签表文本, 替换标签后的代码带PC)
         """
         lines = source_code.split('\n')
-        self.instructions = []
         self.symbols = {}
         self.errors = []
-        parsed_lines = []
-
-        # 第一遍：解析所有行，收集标签和指令
+        
+        # ==================== 第一遍：收集标签 ====================
+        instruction_count = 0
         for line_num, line in enumerate(lines, 1):
-            try:
-                parsed = self.parse_line(line, line_num)
-                parsed_lines.append(parsed)
-                if parsed.label:
-                    self.symbols[parsed.label] = len(self.instructions)
-                if parsed.instruction:
-                    # 检查BRC指令是否使用标签作为目标
-                    # 如果是，需要添加占位符让地址计算正确（BRC会被展开为2条指令）
-                    if self._is_brc_with_label(parsed.instruction):
-                        # BRC使用标签时会被展开为SET + BRC两条指令
-                        # 添加两个占位符以确保后续标签地址正确
-                        self.instructions.append(parsed.instruction)
-                        self.instructions.append(None)  # 占位符，表示第二条指令
-                    else:
-                        self.instructions.append(parsed.instruction)
-            except ValueError as e:
-                self.errors.append(f"第 {line_num} 行错误: {e}")
-
+            # 去注释
+            clean_line = self.remove_comments(line)
+            if not clean_line:
+                continue
+            
+            # 提取标签
+            label, code = self.extract_label(clean_line)
+            
+            if label:
+                # 检查标签名是否使用了寄存器名
+                if self.is_valid_register(label):
+                    self.errors.append(f"第 {line_num} 行错误: 标签名不能作为寄存器名: {label}")
+                    continue
+                # 检查重复标签
+                if label in self.symbols:
+                    self.errors.append(f"第 {line_num} 行错误: 重复的标签: {label}")
+                    continue
+                # 记录标签地址
+                self.symbols[label] = instruction_count
+            
+            # 统计指令数（非空代码行）
+            if code.strip():
+                instruction_count += 1
+        
         if self.errors:
             raise ValueError("\n".join(self.errors))
-
-        # 生成调试文件1: 去注释带PC地址的代码
+        
+        # ==================== 第二遍：替换标签为立即数 ====================
+        processed_lines = []
+        for line_num, line in enumerate(lines, 1):
+            try:
+                new_line = self.replace_labels(line)
+                processed_lines.append((line_num, new_line, line))
+            except ValueError as e:
+                self.errors.append(f"第 {line_num} 行错误: {e}")
+        
+        if self.errors:
+            raise ValueError("\n".join(self.errors))
+        
+        # 生成替换标签后的代码（带PC地址）- 用于调试
+        replaced_code_lines = []
+        pc = 0
+        for line_num, processed_line, original_line in processed_lines:
+            # 去注释
+            clean_line = self.remove_comments(processed_line)
+            if not clean_line:
+                continue
+            
+            # 提取标签
+            label, code = self.extract_label(clean_line)
+            
+            # 如果有标签，单独显示标签行
+            if label:
+                replaced_code_lines.append(f"// --- {label} ---")
+            
+            # 如果有代码，显示带PC地址的代码
+            if code.strip():
+                replaced_code_lines.append(f"[{pc:3d}\\0x{pc:04X}] {code.strip()}")
+                pc += 1
+        
+        replaced_code = '\n'.join(replaced_code_lines)
+        
+        # ==================== 第三遍：解析指令并生成机器码 ====================
+        self.instructions = []
+        parsed_lines = []
+        
+        for line_num, processed_line, original_line in processed_lines:
+            try:
+                parsed = self.parse_line(processed_line, line_num)
+                # 保留原始行内容用于调试显示
+                parsed.line_content = original_line
+                parsed_lines.append(parsed)
+                if parsed.instruction:
+                    self.instructions.append(parsed.instruction)
+            except ValueError as e:
+                self.errors.append(f"第 {line_num} 行错误: {e}")
+        
+        if self.errors:
+            raise ValueError("\n".join(self.errors))
+        
+        # 生成调试文件: 去注释带PC地址的原始代码
         debug_code_lines = []
-        debug_code_lines.append("; 调试文件: 去除注释后的汇编代码")
-        debug_code_lines.append("; 格式: [PC地址] 代码 (十进制/十六进制)")
+        debug_code_lines.append("// 调试文件: 去除注释后的汇编代码")
+        debug_code_lines.append("// 格式: [PC地址] 代码 (十进制/十六进制)")
         debug_code_lines.append("")
         
-        # 创建PC地址映射
         pc = 0
         for parsed in parsed_lines:
-            # 如果有标签，显示标签
             if parsed.label:
-                debug_code_lines.append(f"; --- {parsed.label} ---")
+                debug_code_lines.append(f"// --- {parsed.label} ---")
             
             if parsed.instruction:
-                # 获取原始代码（去注释）
                 clean_line = self.remove_comments(parsed.line_content)
                 if clean_line:
-                    # 检查是否是BRC使用标签（会展开为2条指令）
-                    if self._is_brc_with_label(parsed.instruction):
-                        debug_code_lines.append(f"[{pc:3d}/0x{pc:04X}] {clean_line}  ; 展开为2条指令")
-                        pc += 2
-                    else:
-                        debug_code_lines.append(f"[{pc:3d}/0x{pc:04X}] {clean_line}")
-                        pc += 1
+                    debug_code_lines.append(f"[{pc:3d}/0x{pc:04X}] {clean_line}")
+                    pc += 1
         
         debug_code = '\n'.join(debug_code_lines)
         
-        # 生成调试文件2: 标签表
+        # 生成调试文件: 标签表
         debug_symbols_lines = []
-        debug_symbols_lines.append("; 调试文件: 标签地址表")
-        debug_symbols_lines.append("; 格式: 标签名 = 地址(十进制) / 地址(十六进制)")
+        debug_symbols_lines.append("// 标签地址表")
+        debug_symbols_lines.append("// 格式: 标签名 = 地址(十进制) / 地址(十六进制)")
         debug_symbols_lines.append("")
         
         for label, addr in sorted(self.symbols.items(), key=lambda x: x[1]):
             debug_symbols_lines.append(f"{label:20s} = {addr:3d} (0x{addr:04X})")
         
         debug_symbols = '\n'.join(debug_symbols_lines)
-
-        # 第二遍：生成机器码，展开标签跳转
+        
+        # 第四遍：生成机器码
         machine_codes = []
         
         for i, inst in enumerate(self.instructions):
             try:
-                # 跳过占位符（None）
-                if inst is None:
-                    continue
-                
-                # 检查是否需要双指令展开（BRC指令使用标签）
-                if inst.inst_type in [InstructionType.BEQ, InstructionType.BNE,
-                                      InstructionType.BLT, InstructionType.BGE]:
-                    target = inst.operands[0]
-                    # 如果目标是标签（不是寄存器格式R+数字，不是立即数）
-                    import re
-                    is_register = bool(re.match(r'^[Rr]\d+$', target))
-                    if not is_register and not target.startswith('#'):
-                        if target not in self.symbols:
-                            raise ValueError(f"未定义的标签: {target}")
-                        
-                        # 分配临时寄存器 - 使用固定寄存器15作为BRC专用临时寄存器
-                        # 约定：R15专用于BRC分支指令，JMP返回地址使用其他寄存器(R1-R14)
-                        temp_reg = 15
-                        
-                        # 生成第一条指令: SET temp_reg, #label_addr
-                        label_addr = self.symbols[target]
-                        set_inst = Instruction(
-                            InstructionType.SET,
-                            [f"R{temp_reg}", f"#{label_addr}"],
-                            inst.line_num,
-                            f"SET R{temp_reg}, #{label_addr}  ; 加载标签 {target} 地址"
-                        )
-                        set_code = self.encode_instruction(set_inst, i)
-                        machine_codes.append(set_code)
-                        
-                        # 生成第二条指令: BRC temp_reg, Rs2 op Rd
-                        # 替换目标为临时寄存器
-                        new_ops = [f"R{temp_reg}"] + inst.operands[1:]
-                        brc_inst = Instruction(
-                            inst.inst_type,
-                            new_ops,
-                            inst.line_num,
-                            inst.line_content
-                        )
-                        brc_code = self.encode_instruction(brc_inst, i)
-                        machine_codes.append(brc_code)
-                        continue  # 跳过正常编码
-                
-                # 正常编码
                 code = self.encode_instruction(inst, i)
                 machine_codes.append(code)
             except ValueError as e:
                 self.errors.append(f"第 {inst.line_num} 行错误 ({inst.line_content}): {e}")
-
+        
         if self.errors:
             raise ValueError("\n".join(self.errors))
+        
+        return machine_codes, debug_code, debug_symbols, replaced_code
 
-        return machine_codes, debug_code, debug_symbols
-
-    def format_verilog(self, codes: List[int]) -> str:
+    def format_verilog(self, codes: List[int], module_name: str = "prog_rom") -> str:
         """格式化为Verilog初始化代码"""
         lines = [
             '// Simple CPU Program Memory Initialization', 
-            'module prog_rom(',
+            f'module {module_name}(',
             '    input wire [7:0] prog_addr,',
             '    output reg [31:0] prog_data',
             ');',
@@ -704,26 +940,46 @@ class SimpleCPUAssembler:
 
 def create_sample_asm():
     """创建示例汇编代码"""
-    return """; Simple CPU 示例程序
-; 计算 1 + 2 + 3 + 4 = 10
+    return """// Simple CPU 示例程序 - 完整指令集演示
+// 计算 1 + 2 + 3 + 4 = 10，演示各种指令
 
 start:
-    MOV R0, #0          ; R0 = 0 (累加器)
-    MOV R1, #1          ; R1 = 1
-    MOV R2, #2          ; R2 = 2
-    MOV R3, #3          ; R3 = 3
-    MOV R4, #4          ; R4 = 4
+    // 立即数加载 (I-Type SET)
+    MOV R0, #0              // R0 = 0
+    MOV R1, #1              // R1 = 1
+    MOV R2, #2              // R2 = 2
+    MOV R3, #3              // R3 = 3
+    MOV R4, #4              // R4 = 4
 
-    MOV R5, R1          ; R5 = R1 + R0 = 1
-    MOV R5, R5 + R2     ; R5 = R5 + R2 = 3
-    MOV R5, R5 + R3     ; R5 = R5 + R3 = 6
-    MOV R5, R5 + R4     ; R5 = R5 + R4 = 10
+    // ALU I-Type 运算
+    MOV R5, R1 + #0         // R5 = 1
+    MOV R5, R5 + R2         // R5 = 3 (R-Type ADD)
+    MOV R5, R5 + #3         // R5 = 6 (I-Type ADD)
+    MOV R5, R5 + R4         // R5 = 10 (R-Type ADD)
 
-    MOV [R0], R5        ; 存储结果到内存地址0
-    MOV R6, [R0]        ; 从内存读取到R6
+    // 内存访问 - I-Type (立即数偏移)
+    MOV [R0 + #0], R5       // Mem[0] = 10
+    MOV R6, [R0 + #0]       // R6 = Mem[0] = 10
+
+    // 内存访问 - R-Type (寄存器偏移)
+    MOV [R0 + R1], R5       // Mem[1] = 10
+    MOV R7, [R0 + R1]       // R7 = Mem[1] = 10
+
+    // 逻辑运算
+    MOV R8, R5 & #0xFF      // R8 = 10 & 0xFF = 10
+    MOV R9, R5 | #0xF0      // R9 = 10 | 0xF0 = 0xFA
+    MOV R10, R5 ^ R1        // R10 = 10 ^ 1 = 11
+
+    // 移位运算
+    MOV R11, R5 << #1       // R11 = 10 << 1 = 20
+    MOV R12, R11 >> #2      // R12 = 20 >> 2 = 5
+    MOV R13, #0x80 >>> #1   // R13 = 0x80 >>> 1 = 0xC0 (算术右移)
+
+    // 分支指令
+    BRC loop, R5 == R6      // if (10 == 10) goto loop
 
 loop:
-    JMP R7, loop        ; 无限循环
+    JMP loop, R14           // 无限循环 (JMP target, Rd)
 """
 
 
@@ -733,40 +989,32 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  sass program.asm                          # 默认Verilog格式输出
-  sass program.asm -o output.v -f verilog
-  sass program.asm -o output.coe -f coe          # Xilinx COE格式
-  sass program.asm -o output.mif -f mif          # Altera MIF格式
-  sass program.asm -f hex                        # 纯十六进制
-  sass program.asm -d                            # 生成调试文件
-  sass --sample > sample.asm                     # 生成示例程序
+  sass program.asm                    # 默认输出Verilog格式
+  sass program.asm -f coe             # 输出Xilinx COE格式
+  sass program.asm -f mif             # 输出Altera MIF格式
+  sass program.asm -f hex -p          # 打印十六进制到控制台
+  sass program.asm -d                 # 同时生成调试文件
+  sass --sample > sample.asm          # 生成示例程序
 
-支持的指令语法:
-  MOV 指令:
-    MOV Rd, #imm              ; 加载立即数: Rd = imm
-    MOV Rd, Rs                ; 寄存器复制: Rd = Rs
-    MOV Rd, Rs2 + Rs1         ; 加法: Rd = Rs2 + Rs1
-    MOV Rd, Rs2 - Rs1         ; 减法: Rd = Rs2 - Rs1
-    MOV Rd, Rs2 & Rs1         ; 按位与: Rd = Rs2 & Rs1
-    MOV Rd, Rs2 | Rs1         ; 按位或: Rd = Rs2 | Rs1
-    MOV Rd, Rs2 ^ Rs1         ; 按位异或: Rd = Rs2 ^ Rs1
-    MOV Rd, Rs2 << Rs1        ; 逻辑左移: Rd = Rs2 << Rs1
-    MOV Rd, Rs2 >> Rs1        ; 逻辑右移: Rd = Rs2 >> Rs1
-    MOV Rd, [Rs]              ; 内存读: Rd = Mem[Rs]
-    MOV [Rs1], Rs2            ; 内存写: Mem[Rs1] = Rs2
+支持的语法:
+  操作数类型:
+    Rd, Rs, Rn          - 寄存器 (R0-R15)
+    #imm                - 立即数 (16位有符号: -32768~32767)
+    label               - 标签
 
-  JMP 指令:
-    JMP Rd, #imm              ; 跳转到立即数地址: Rd = PC+1, PC = imm
-    JMP Rd, label             ; 跳转到标签: Rd = PC+1, PC = label
-    JMP Rd, Rs                ; 寄存器跳转: Rd = PC+1, PC = Rs
+  运算符:
+    + - & | ^           - 算术/逻辑运算
+    << >> >>>           - 移位 (>>>为算术右移)
+    == != < >=          - 比较运算
 
-  BRC 指令 (分支):
-    BRC Rs, Rd2 == Rd1        ; 相等分支: if (Rd2 == Rd1) PC = Rs
-    BRC Rs, Rd2 != Rd1        ; 不等分支: if (Rd2 != Rd1) PC = Rs
-    BRC Rs, Rd2 < Rd1         ; 小于分支: if (Rd2 < Rd1) PC = Rs
-    BRC Rs, Rd2 >= Rd1        ; 大于等于分支: if (Rd2 >= Rd1) PC = Rs
-    BRC Rs, Rd2 > Rd1         ; 大于分支: if (Rd1 < Rd2) PC = Rs
-    BRC Rs, Rd2 <= Rd1        ; 小于等于分支: if (Rd1 >= Rd2) PC = Rs
+  指令格式:
+    MOV Rd, #imm                    - 立即数加载
+    MOV Rd, Rs2 op Rs1              - 寄存器运算 (R-Type)
+    MOV Rd, Rs op #imm              - 立即数运算 (I-Type)
+    MOV Rd, [Rs + offset]           - 内存读 (offset: #imm 或 Rs)
+    MOV [Rs + offset], Rd           - 内存写
+    JMP target, Rd                  - 跳转 (target: #imm, label, 或 Rs; Rd为链接寄存器)
+    BRC target, Rd2 cond Rd1        - 条件分支 (cond: == != < >=)
         """
     )
 
@@ -801,10 +1049,10 @@ def main():
         print(f"错误: 读取文件失败: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # 汇编
+    # 组装代码
     assembler = SimpleCPUAssembler()
     try:
-        machine_codes, debug_code, debug_symbols = assembler.assemble(source_code)
+        machine_codes, debug_code, debug_symbols, replaced_code = assembler.assemble(source_code)
     except ValueError as e:
         print(f"汇编错误:\n{e}", file=sys.stderr)
         sys.exit(1)
@@ -824,15 +1072,17 @@ def main():
         }
         output_file = base_name + ext_map[args.format]
     
-    # 确定调试文件名
-    debug_base = os.path.splitext(output_file)[0]
-    debug_code_file = debug_base + "_debug.asm"
-    debug_symbols_file = debug_base + "_symbols.txt"
+    # 确定调试文件名（基于源文件名）
+    source_base = os.path.splitext(args.input)[0]
+    label_table_file = source_base + "_label_table.txt"
+    replaced_asm_file = source_base + "_replaced.asm"
 
     # 格式化和输出
     is_binary = False
     if args.format == 'verilog':
-        output = assembler.format_verilog(machine_codes)
+        # 使用输入文件的基础名作为 module 名
+        module_name = os.path.splitext(os.path.basename(args.input))[0]
+        output = assembler.format_verilog(machine_codes, module_name)
     elif args.format == 'coe':
         output = assembler.format_coe(machine_codes)
     elif args.format == 'mif':
@@ -871,11 +1121,11 @@ def main():
             # 保存调试文件(仅在--debug模式下)
             if args.debug:
                 try:
-                    with open(debug_code_file, 'w', encoding='utf-8') as f:
-                        f.write(debug_code)
-                    with open(debug_symbols_file, 'w', encoding='utf-8') as f:
+                    with open(label_table_file, 'w', encoding='utf-8') as f:
                         f.write(debug_symbols)
-                    print(f"调试: 已生成 {debug_code_file} 和 {debug_symbols_file}")
+                    with open(replaced_asm_file, 'w', encoding='utf-8') as f:
+                        f.write(replaced_code)
+                    print(f"调试: 已生成 {label_table_file} 和 {replaced_asm_file}")
                 except Exception as e:
                     print(f"警告: 调试文件写入失败: {e}", file=sys.stderr)
                 

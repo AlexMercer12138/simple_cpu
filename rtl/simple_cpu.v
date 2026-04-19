@@ -53,22 +53,25 @@ module simple_cpu(
     input       [31:0]                  m_axi_rdata
     );
 
-    localparam  SET                     = 4'b0000;
-    localparam  ADD                     = 4'b0001;
-    localparam  SUB                     = 4'b0010;
-    localparam  AND                     = 4'b0011;
-    localparam  OR                      = 4'b0100;
-    localparam  XOR                     = 4'b0101;
-    localparam  SLL                     = 4'b0110;
-    localparam  SRL                     = 4'b0111;
-    localparam  MWR                     = 4'b1000;
-    localparam  MRD                     = 4'b1001;
-    localparam  JAL                     = 4'b1010;
-    localparam  JALR                    = 4'b1011;
-    localparam  BEQ                     = 4'b1100;
-    localparam  BNE                     = 4'b1101;
-    localparam  BLT                     = 4'b1110;
-    localparam  BGE                     = 4'b1111;
+    localparam  OP_IMMEDIATE            = 4'b0001;
+    localparam  OP_REGISTER             = 4'b0010;
+
+    localparam  FUNC_SET                = 4'b0000;
+    localparam  FUNC_ADD                = 4'b0001;
+    localparam  FUNC_SUB                = 4'b0010;
+    localparam  FUNC_AND                = 4'b0011;
+    localparam  FUNC_OR                 = 4'b0100;
+    localparam  FUNC_XOR                = 4'b0101;
+    localparam  FUNC_SLL                = 4'b0110;
+    localparam  FUNC_SRL                = 4'b0111;
+    localparam  FUNC_SRA                = 4'b1000;
+    localparam  FUNC_MWR                = 4'b1001;
+    localparam  FUNC_MRD                = 4'b1010;
+    localparam  FUNC_JAL                = 4'b1011;
+    localparam  FUNC_BEQ                = 4'b1100;
+    localparam  FUNC_BNE                = 4'b1101;
+    localparam  FUNC_BLT                = 4'b1110;
+    localparam  FUNC_BGE                = 4'b1111;
 
     reg                                 prog_load;
     reg                                 prog_exec;
@@ -76,19 +79,21 @@ module simple_cpu(
     reg     [7:0]                       prog_next;
     reg                                 prog_step;
 
-    reg     [31:0]                      regi_int    [0:15];
+    reg     signed  [31:0]              regi_int    [0:15];
 
-    wire    [19:0]                      immediate;
+    wire    [15:0]                      immediate;
     wire    [3:0]                       reg_src_1;
     wire    [3:0]                       reg_src_2;
     wire    [3:0]                       reg_dest;
     wire    [3:0]                       opcode;
+    wire    [3:0]                       funct;
 
-    assign  immediate = prog_data[31:12];
-    assign  reg_src_1 = prog_data[15:12];
-    assign  reg_src_2 = prog_data[11:8];
-    assign  reg_dest = prog_data[7:4];
-    assign  opcode = prog_data[3:0];
+    assign  immediate = prog_data[31:16];
+    assign  reg_src_1 = prog_data[19:16];
+    assign  reg_src_2 = prog_data[15:12];
+    assign  reg_dest = prog_data[11:8];
+    assign  opcode = prog_data[7:4];
+    assign  funct = prog_data[3:0];
 
     always @(posedge clk) begin
         if(!rst_n) begin
@@ -114,89 +119,181 @@ module simple_cpu(
             end
         end else if(prog_busy) begin
             case(opcode)
-                SET:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? prog_addr + 1 : prog_next;
-                    regi_int[reg_dest] <= prog_exec ? immediate : regi_int[reg_dest];
+                OP_IMMEDIATE:begin
+                    case(funct)
+                        FUNC_SET:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? immediate : regi_int[reg_dest];
+                        end
+                        FUNC_ADD:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] + immediate : regi_int[reg_dest];
+                        end
+                        FUNC_SUB:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] - immediate : regi_int[reg_dest];
+                        end
+                        FUNC_AND:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] & immediate : regi_int[reg_dest];
+                        end
+                        FUNC_OR:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] | immediate : regi_int[reg_dest];
+                        end
+                        FUNC_XOR:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] ^ immediate : regi_int[reg_dest];
+                        end
+                        FUNC_SLL:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] << immediate : regi_int[reg_dest];
+                        end
+                        FUNC_SRL:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] >> immediate : regi_int[reg_dest];
+                        end
+                        FUNC_SRA:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] >>> immediate : regi_int[reg_dest];
+                        end
+                        FUNC_MWR:begin
+                            prog_step <= m_axi_bvalid & m_axi_bready;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            m_axi_awvalid <= prog_exec ? 1 : m_axi_awvalid & m_axi_awready ? 0 : m_axi_awvalid;
+                            m_axi_wvalid <= prog_exec ? 1 : m_axi_wvalid & m_axi_wready ? 0 : m_axi_wvalid;
+                            m_axi_bready <= prog_exec ? 1 : m_axi_bvalid & m_axi_bready ? 0 : m_axi_bready;
+                            m_axi_awaddr <= prog_exec ? regi_int[reg_src_2] + immediate : m_axi_awaddr;
+                            m_axi_wdata <= prog_exec ? regi_int[reg_dest] : m_axi_wdata;
+                            m_axi_wstrb <= prog_exec ? 4'b1111 : m_axi_wstrb;
+                        end
+                        FUNC_MRD:begin
+                            prog_step <= m_axi_rvalid & m_axi_rready;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            m_axi_arvalid <= prog_exec ? 1 : m_axi_arvalid & m_axi_arready ? 0 : m_axi_arvalid;
+                            m_axi_rready <= prog_exec ? 1 : m_axi_rvalid & m_axi_rready ? 0 : m_axi_rready;
+                            m_axi_araddr <= prog_exec ? regi_int[reg_src_2] + immediate : m_axi_araddr;
+                            regi_int[reg_dest] <= m_axi_rvalid & m_axi_rready ? m_axi_rdata : regi_int[reg_dest];
+                        end
+                        FUNC_JAL:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? immediate : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? prog_addr + 1 : regi_int[reg_dest];
+                        end
+                        FUNC_BEQ:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? (regi_int[reg_src_2] == regi_int[reg_dest] ? immediate : prog_addr + 1) : prog_next;
+                        end
+                        FUNC_BNE:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? (regi_int[reg_src_2] != regi_int[reg_dest] ? immediate : prog_addr + 1) : prog_next;
+                        end
+                        FUNC_BLT:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? ($signed(regi_int[reg_src_2]) < $signed(regi_int[reg_dest]) ? immediate : prog_addr + 1) : prog_next;
+                        end
+                        FUNC_BGE:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? ($signed(regi_int[reg_src_2]) >= $signed(regi_int[reg_dest]) ? immediate : prog_addr + 1) : prog_next;
+                        end
+                    endcase
                 end
-                ADD:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? prog_addr + 1 : prog_next;
-                    regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] + regi_int[reg_src_1] : regi_int[reg_dest];
-                end
-                SUB:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? prog_addr + 1 : prog_next;
-                    regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] - regi_int[reg_src_1] : regi_int[reg_dest];
-                end
-                AND:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? prog_addr + 1 : prog_next;
-                    regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] & regi_int[reg_src_1] : regi_int[reg_dest];
-                end
-                OR:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? prog_addr + 1 : prog_next;
-                    regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] | regi_int[reg_src_1] : regi_int[reg_dest];
-                end
-                XOR:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? prog_addr + 1 : prog_next;
-                    regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] ^ regi_int[reg_src_1] : regi_int[reg_dest];
-                end
-                SLL:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? prog_addr + 1 : prog_next;
-                    regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] << regi_int[reg_src_1] : regi_int[reg_dest];
-                end
-                SRL:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? prog_addr + 1 : prog_next;
-                    regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] >> regi_int[reg_src_1] : regi_int[reg_dest];
-                end
-                MWR:begin
-                    prog_step <= m_axi_bvalid & m_axi_bready;
-                    prog_next <= prog_exec ? prog_addr + 1 : prog_next;
-                    m_axi_awvalid <= prog_exec ? 1 : m_axi_awvalid & m_axi_awready ? 0 : m_axi_awvalid;
-                    m_axi_wvalid <= prog_exec ? 1 : m_axi_wvalid & m_axi_wready ? 0 : m_axi_wvalid;
-                    m_axi_bready <= prog_exec ? 1 : m_axi_bvalid & m_axi_bready ? 0 : m_axi_bready;
-                    m_axi_awaddr <= prog_exec ? regi_int[reg_src_1] : m_axi_awaddr;
-                    m_axi_wdata <= prog_exec ? regi_int[reg_src_2] : m_axi_wdata;
-                    m_axi_wstrb <= prog_exec ? 4'b1111 : m_axi_wstrb;
-                end
-                MRD:begin
-                    prog_step <= m_axi_rvalid & m_axi_rready;
-                    prog_next <= prog_exec ? prog_addr + 1 : prog_next;
-                    m_axi_arvalid <= prog_exec ? 1 : m_axi_arvalid & m_axi_arready ? 0 : m_axi_arvalid;
-                    m_axi_rready <= prog_exec ? 1 : m_axi_rvalid & m_axi_rready ? 0 : m_axi_rready;
-                    m_axi_araddr <= prog_exec ? regi_int[reg_src_1] : m_axi_araddr;
-                    regi_int[reg_dest] <= m_axi_rvalid & m_axi_rready ? m_axi_rdata : regi_int[reg_dest];
-                end
-                JAL:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? immediate : prog_next;
-                    regi_int[reg_dest] <= prog_exec ? prog_addr + 1 : regi_int[reg_dest];
-                end
-                JALR:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? regi_int[reg_src_1] : prog_next;
-                    regi_int[reg_dest] <= prog_exec ? prog_addr + 1 : regi_int[reg_dest];
-                end
-                BEQ:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? (regi_int[reg_src_2] == regi_int[reg_dest] ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
-                end
-                BNE:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? (regi_int[reg_src_2] != regi_int[reg_dest] ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
-                end
-                BLT:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? (regi_int[reg_src_2] < regi_int[reg_dest] ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
-                end
-                BGE:begin
-                    prog_step <= prog_exec;
-                    prog_next <= prog_exec ? (regi_int[reg_src_2] >= regi_int[reg_dest] ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
+                OP_REGISTER:begin
+                    case(funct)
+                        FUNC_SET:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_1] : regi_int[reg_dest];
+                        end
+                        FUNC_ADD:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] + regi_int[reg_src_1] : regi_int[reg_dest];
+                        end
+                        FUNC_SUB:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] - regi_int[reg_src_1] : regi_int[reg_dest];
+                        end
+                        FUNC_AND:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] & regi_int[reg_src_1] : regi_int[reg_dest];
+                        end
+                        FUNC_OR:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] | regi_int[reg_src_1] : regi_int[reg_dest];
+                        end
+                        FUNC_XOR:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] ^ regi_int[reg_src_1] : regi_int[reg_dest];
+                        end
+                        FUNC_SLL:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] << regi_int[reg_src_1] : regi_int[reg_dest];
+                        end
+                        FUNC_SRL:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] >> regi_int[reg_src_1] : regi_int[reg_dest];
+                        end
+                        FUNC_SRA:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] >>> regi_int[reg_src_1] : regi_int[reg_dest];
+                        end
+                        FUNC_MWR:begin
+                            prog_step <= m_axi_bvalid & m_axi_bready;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            m_axi_awvalid <= prog_exec ? 1 : m_axi_awvalid & m_axi_awready ? 0 : m_axi_awvalid;
+                            m_axi_wvalid <= prog_exec ? 1 : m_axi_wvalid & m_axi_wready ? 0 : m_axi_wvalid;
+                            m_axi_bready <= prog_exec ? 1 : m_axi_bvalid & m_axi_bready ? 0 : m_axi_bready;
+                            m_axi_awaddr <= prog_exec ? regi_int[reg_src_2] + regi_int[reg_src_1] : m_axi_awaddr;
+                            m_axi_wdata <= prog_exec ? regi_int[reg_dest] : m_axi_wdata;
+                            m_axi_wstrb <= prog_exec ? 4'b1111 : m_axi_wstrb;
+                        end
+                        FUNC_MRD:begin
+                            prog_step <= m_axi_rvalid & m_axi_rready;
+                            prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                            m_axi_arvalid <= prog_exec ? 1 : m_axi_arvalid & m_axi_arready ? 0 : m_axi_arvalid;
+                            m_axi_rready <= prog_exec ? 1 : m_axi_rvalid & m_axi_rready ? 0 : m_axi_rready;
+                            m_axi_araddr <= prog_exec ? regi_int[reg_src_2] + regi_int[reg_src_1] : m_axi_araddr;
+                            regi_int[reg_dest] <= m_axi_rvalid & m_axi_rready ? m_axi_rdata : regi_int[reg_dest];
+                        end
+                        FUNC_JAL:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? regi_int[reg_src_1] : prog_next;
+                            regi_int[reg_dest] <= prog_exec ? prog_addr + 1 : regi_int[reg_dest];
+                        end
+                        FUNC_BEQ:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? (regi_int[reg_src_2] == regi_int[reg_dest] ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
+                        end
+                        FUNC_BNE:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? (regi_int[reg_src_2] != regi_int[reg_dest] ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
+                        end
+                        FUNC_BLT:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? ($signed(regi_int[reg_src_2]) < $signed(regi_int[reg_dest]) ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
+                        end
+                        FUNC_BGE:begin
+                            prog_step <= prog_exec;
+                            prog_next <= prog_exec ? ($signed(regi_int[reg_src_2]) >= $signed(regi_int[reg_dest]) ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
+                        end
+                    endcase
                 end
             endcase
         end
