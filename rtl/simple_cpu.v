@@ -27,7 +27,7 @@ module simple_cpu(
     input                               clk,
     input                               rst_n,
 
-    output  reg [7:0]                   prog_addr,
+    output  reg [15:0]                  prog_addr,
     input       [31:0]                  prog_data,
 
     output  reg                         m_axi_awvalid,
@@ -53,6 +53,7 @@ module simple_cpu(
     input       [31:0]                  m_axi_rdata
     );
 
+    localparam  OP_NOP                  = 4'b0000;
     localparam  OP_IMMEDIATE            = 4'b0001;
     localparam  OP_REGISTER             = 4'b0010;
 
@@ -76,7 +77,7 @@ module simple_cpu(
     reg                                 prog_load;
     reg                                 prog_exec;
     reg                                 prog_busy;
-    reg     [7:0]                       prog_next;
+    reg     [15:0]                      prog_next;
     reg                                 prog_step;
 
     reg     signed  [31:0]              regi_int    [0:15];
@@ -117,6 +118,15 @@ module simple_cpu(
             for (i = 0;i < 16;i = i + 1) begin
                 regi_int[i] <= 0;
             end
+            m_axi_awvalid <= 0;
+            m_axi_awaddr <= 0;
+            m_axi_wvalid <= 0;
+            m_axi_wdata <= 0;
+            m_axi_wstrb <= 0;
+            m_axi_bready <= 0;
+            m_axi_arvalid <= 0;
+            m_axi_araddr <= 0;
+            m_axi_rready <= 0;
         end else if(prog_busy) begin
             case(opcode)
                 OP_IMMEDIATE:begin
@@ -294,6 +304,14 @@ module simple_cpu(
                             prog_next <= prog_exec ? ($signed(regi_int[reg_src_2]) >= $signed(regi_int[reg_dest]) ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
                         end
                     endcase
+                end
+                OP_NOP:begin
+                    prog_step <= prog_exec;
+                    prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                end
+                default:begin
+                    prog_step <= 0;
+                    prog_next <= 0;
                 end
             endcase
         end

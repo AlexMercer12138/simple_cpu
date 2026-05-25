@@ -646,7 +646,7 @@ export class SimpleCPUAssembler {
         const lines = [
             '// Simple CPU Program Memory Initialization',
             `module ${moduleName}(`,
-            '    input wire [31:0] prog_addr,',
+            '    input wire [15:0] prog_addr,',
             '    output reg [31:0] prog_data',
             ');',
             'always @(*) begin',

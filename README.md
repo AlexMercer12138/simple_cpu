@@ -22,7 +22,7 @@
 - 📝 **灵活指令集** - 16种功能 × 2种寻址方式 = 32条指令
 - 🔄 **三级流水线** - 取指、执行和跳转阶段串行处理
 - 🔢 **有符号数支持** - 原生支持有符号数运算和比较
-- 🎨 **VSCode 插件** - 语法高亮、代码片段、智能提示
+- 🎨 **VSCode 汇编器扩展** - 集成汇编、语法高亮、代码片段、编译按钮和多格式输出
 
 ---
 
@@ -35,22 +35,19 @@ CPU/
 ├── rtl/                          # RTL源代码
 │   ├── simple_cpu.v              # CPU核心代码 - 32位RISC处理器实现
 │   ├── s_axi_lite.v              # AXI4-Lite从机接口模块 - 用于外设寄存器访问
-│   └── hello_world.v             # Hello World程序存储器初始化模块
-├── assembler/                    # 汇编器
-│   ├── assembler.py              # 汇编器主程序 - 将汇编转换为机器码
-│   ├── pyproject.toml            # Python包配置 - 支持pip安装
-│   ├── install.bat               # Windows安装脚本 - 一键安装汇编器
-│   ├── uninstall.bat             # Windows卸载脚本
-│   ├── README.md                 # 汇编器使用说明
-│   └── sass-vscode-extension/    # VSCode插件
-│       ├── package.json          # 插件配置
-│       ├── syntaxes/             # 语法高亮定义
-│       ├── snippets/             # 代码片段
-│       ├── language-configuration/   # 语言配置
-│       └── example.asm           # 示例汇编程序
-├── sim/                          # 仿真测试
+│   ├── hello_world.v             # Hello World程序存储器初始化模块
 │   └── simple_cpu_tb.v           # CPU测试平台 - 带指令追踪功能
-├── example/                      # 示例程序
+├── sass-vscode/                  # VSCode 汇编器扩展
+│   ├── src/                      # TypeScript 源码
+│   │   ├── assembler.ts          # 内置汇编器实现
+│   │   └── extension.ts          # VSCode 扩展入口
+│   ├── syntaxes/                 # 语法高亮定义
+│   ├── snippets/                 # 代码片段
+│   ├── language-configuration/   # 语言配置
+│   ├── package.json              # 扩展配置
+│   ├── tsconfig.json             # TypeScript 编译配置
+│   └── README.md                 # 扩展市场页说明
+├── example/                      # 示例汇编程序
 │   ├── hello_world.asm           # Hello World滑动窗口演示程序
 │   └── inst_test.asm             # 全指令集测试程序
 ├── ISA.md                        # 指令集参考文档
@@ -65,7 +62,7 @@ CPU/
 |------|------|------|------|
 | `clk` | Input | 1 | 系统时钟 |
 | `rst_n` | Input | 1 | 低电平有效复位 |
-| `prog_addr` | Output | 8 | 程序地址（256条指令） |
+| `prog_addr` | Output | 16 | 程序地址（65536条指令） |
 | `prog_data` | Input | 32 | 程序数据（指令） |
 
 **AXI4-Lite主接口**
@@ -133,40 +130,81 @@ CPU/
 
 ---
 
-## 🛠️ 汇编器
+## 🛠️ VSCode 汇编器扩展
 
-项目包含一个Python汇编器，支持简洁的 MOV/JMP/BRC 语法：
+项目现在使用 `sass-vscode` 作为唯一汇编器入口，汇编逻辑已集成在 VSCode 扩展中，无需额外解释器环境。扩展会在打开 `.asm` 文件时提供语法支持和右上角编译按钮。
+
+### 扩展功能
+
+- **内置 TypeScript 汇编器** - 扩展自行完成 `.asm` 到机器码/初始化文件的转换
+- **一键编译按钮** - 打开 `.asm` 文件后，编辑器右上角显示编译按钮
+- **编译模式切换** - 支持正常模式、打印模式、调试模式
+- **输出格式配置** - 支持 Verilog、COE、MIF、Intel HEX、Binary
+- **输出路径配置** - 可输出到源文件目录或用户指定目录
+- **语法高亮与片段** - 支持 MOV/JMP/BRC、寄存器、立即数、标签、注释等高亮和代码片段
+
+### 安装与开发
 
 ```bash
-cd assembler
-python assembler.py program.asm     # 生成 program.v
+cd sass-vscode
+npm install
+npx tsc
 ```
+
+本地开发调试可在 VSCode 中打开 `sass-vscode` 目录，并以扩展开发模式启动。
+
+如需生成 VSIX 安装包：
+
+```bash
+cd sass-vscode
+vsce package
+```
+
+安装 VSIX：
+
+```bash
+code --install-extension sass-asm-syntax-2.0.0.vsix
+```
+
+### 使用方式
+
+1. 在 VSCode 中打开 `.asm` 文件
+2. 点击编辑器右上角的 ▶ `Compile` 按钮
+3. 默认生成同名 `.v` 文件到源文件所在目录
+4. 点击旁边的下拉按钮可切换打印模式或调试模式
+
+### 扩展设置
+
+| 设置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `sass-asm.outputFormat` | `verilog` | 输出格式，可选 `verilog`、`coe`、`mif`、`hex`、`bin` |
+| `sass-asm.outputPath` | 空 | 自定义输出目录；为空时输出到 `.asm` 同目录 |
 
 ### 汇编示例
 
 ```asm
-; 计算 1+2+3+4 = 10
+// 计算 1+2+3+4 = 10
 start:
     MOV R0, #0
     MOV R1, #1
     MOV R2, #2
-    MOV R3, R1 + R2      ; R3 = 3
-    MOV [R0], R3         ; Mem[0] = R3
+    MOV R3, R1 + R2      // R3 = 3
+    MOV [R0], R3         // Mem[0] = R3
 loop:
-    JMP R4, loop         ; 无限循环
+    JMP loop, R4         // 无限循环
 ```
 
 ### 支持的输出格式
 
-| 格式 | 命令 | 说明 |
-|------|------|------|
-| Verilog | `-f verilog` | 完整的ROM模块 |
-| COE | `-f coe` | Xilinx FPGA 内存初始化 |
-| MIF | `-f mif` | Altera/Intel FPGA 内存初始化 |
-| HEX | `-f hex` | Intel HEX文件 |
-| BIN | `-f bin` | 二进制 |
+| 格式 | 扩展名 | 说明 |
+|------|--------|------|
+| Verilog | `.v` | 完整的ROM模块 |
+| COE | `.coe` | Xilinx FPGA 内存初始化 |
+| MIF | `.mif` | Altera/Intel FPGA 内存初始化 |
+| HEX | `.hex` | Intel HEX文件 |
+| BIN | `.bin` | 二进制文件 |
 
-详细说明见 [assembler/README.md](assembler/README.md)
+详细扩展说明见 [sass-vscode/README.md](sass-vscode/README.md)。
 
 ---
 
@@ -205,7 +243,7 @@ loop:
 | 指令数量 | 32条（16种功能 × 2种寻址方式） |
 | 数据通路 | 单周期执行 |
 | 内存接口 | AXI4-Lite |
-| 程序存储 | 256条指令（8位地址） |
+| 程序存储 | 65536条指令（16位地址） |
 | 时间刻度 | 1ns / 1ps |
 | 有符号数支持 | 原生支持 |
 
@@ -213,7 +251,7 @@ loop:
 
 ## ⚠️ 已知限制
 
-- 程序存储有限 - 8位地址仅支持256条指令
+- 程序存储有限 - 16位地址仅支持65536条指令
 - 无硬件乘法/除法 - 需软件实现复杂运算
 - 无中断支持 - 需要外部中断控制器
 - 无调试接口 - 需要时序仿真验证程序正确性
@@ -237,8 +275,7 @@ loop:
 ## 📚 相关文档
 
 - [指令集参考](ISA.md) - 完整的指令集说明
-- [汇编器文档](assembler/README.md) - 汇编器使用指南
-- [VSCode 插件](assembler/sass-vscode-extension) - 语法高亮和代码片段
+- [VSCode 汇编器扩展](sass-vscode/README.md) - 扩展安装、使用和市场页说明
 
 ---
 

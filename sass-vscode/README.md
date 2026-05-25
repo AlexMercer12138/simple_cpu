@@ -173,7 +173,7 @@ MOV R0, #1          // 这也是注释
 
 ```verilog
 module prog_rom(
-    input wire [7:0] prog_addr,
+    input wire [31:0] prog_addr,
     output reg [31:0] prog_data
 );
 always @(*) begin
