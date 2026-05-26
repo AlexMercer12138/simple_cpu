@@ -3,7 +3,9 @@
   "displayName": "SASS Assembly Syntax",
   "description": "Syntax highlighting, snippets and assembler integration for SASS (Simple CPU Assembler)",
   "version": "2.0.0",
-  "publisher": "simple-cpu",
+  "publisher": "Vikai-mercer",
+  "icon": "images/icon.png",
+  "repository": "https://github.com/AlexMercer12138/simple_cpu",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -118,5 +120,10 @@
     "@types/node": "^25.9.1",
     "@types/vscode": "^1.74.0",
     "typescript": "^6.0.3"
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
   }
 }

@@ -628,7 +628,7 @@ export class SimpleCPUAssembler {
         for (let i = 0; i < this.instructions.length; i++) {
             try {
                 const code = this.encodeInstruction(this.instructions[i], i);
-                machineCodes.push(code);
+                machineCodes.push(code >>> 0);
             } catch (e: any) {
                 const inst = this.instructions[i];
                 this.errors.push(`第 ${inst.lineNum} 行错误 (${inst.lineContent}): ${e.message}`);
@@ -653,7 +653,7 @@ export class SimpleCPUAssembler {
             '    case (prog_addr)'
         ];
         for (let i = 0; i < codes.length; i++) {
-            lines.push(`        ${i} : prog_data = 32'h${codes[i].toString(16).toUpperCase().padStart(8, '0')};`);
+            lines.push(`        ${i} : prog_data = 32'h${(codes[i] >>> 0).toString(16).toUpperCase().padStart(8, '0')};`);
         }
         lines.push(`        default: prog_data = 0;`);
         lines.push(`    endcase`);
@@ -670,9 +670,9 @@ export class SimpleCPUAssembler {
         ];
         for (let i = 0; i < codes.length; i++) {
             if (i === codes.length - 1) {
-                lines.push(`${codes[i].toString(16).toUpperCase().padStart(8, '0')};`);
+                lines.push(`${(codes[i] >>> 0).toString(16).toUpperCase().padStart(8, '0')};`);
             } else {
-                lines.push(`${codes[i].toString(16).toUpperCase().padStart(8, '0')},`);
+                lines.push(`${(codes[i] >>> 0).toString(16).toUpperCase().padStart(8, '0')},`);
             }
         }
         return lines.join('\n');
@@ -690,7 +690,7 @@ export class SimpleCPUAssembler {
             'CONTENT BEGIN'
         ];
         for (let i = 0; i < codes.length; i++) {
-            lines.push(`    ${i.toString(16).toUpperCase().padStart(4, '0')} : ${codes[i].toString(16).toUpperCase().padStart(8, '0')};`);
+            lines.push(`    ${i.toString(16).toUpperCase().padStart(4, '0')} : ${(codes[i] >>> 0).toString(16).toUpperCase().padStart(8, '0')};`);
         }
         if (codes.length < depth) {
             lines.push(`    [${codes.length.toString(16).toUpperCase().padStart(4, '0')}..${(depth - 1).toString(16).toUpperCase().padStart(4, '0')}] : 00000000;`);
@@ -704,9 +704,9 @@ export class SimpleCPUAssembler {
         for (let i = 0; i < codes.length; i++) {
             const addr = i * 4;
             const byteData = [
-                (codes[i] >> 24) & 0xFF,
-                (codes[i] >> 16) & 0xFF,
-                (codes[i] >> 8) & 0xFF,
+                (codes[i] >>> 24) & 0xFF,
+                (codes[i] >>> 16) & 0xFF,
+                (codes[i] >>> 8) & 0xFF,
                 codes[i] & 0xFF
             ];
             let checksum = 4 + ((addr >> 8) & 0xFF) + (addr & 0xFF) + 0;
@@ -724,9 +724,9 @@ export class SimpleCPUAssembler {
     formatBinBytes(codes: number[]): Buffer {
         const byteArray: number[] = [];
         for (const code of codes) {
-            byteArray.push((code >> 24) & 0xFF);
-            byteArray.push((code >> 16) & 0xFF);
-            byteArray.push((code >> 8) & 0xFF);
+            byteArray.push((code >>> 24) & 0xFF);
+            byteArray.push((code >>> 16) & 0xFF);
+            byteArray.push((code >>> 8) & 0xFF);
             byteArray.push(code & 0xFF);
         }
         return Buffer.from(byteArray);

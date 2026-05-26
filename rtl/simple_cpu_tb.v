@@ -1,24 +1,4 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 2026/04/18 18:30:12
-// Design Name: 
-// Module Name: simple_cpu_tb
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: Simple CPU Testbench with instruction trace
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
 
 module simple_cpu_tb();
 
@@ -57,7 +37,7 @@ module simple_cpu_tb();
     end
 
     // Signals for CPU connection
-    wire [7:0]  prog_addr;
+    wire [15:0] prog_addr;
     wire [31:0] prog_data;
 
     // Monitor data at address 0x00
@@ -81,6 +61,22 @@ module simple_cpu_tb();
     wire        m_axi_rready;
     wire [1:0]  m_axi_rresp;
     wire [31:0] m_axi_rdata;
+
+    wire        lb_rden;
+    wire        lb_wren;
+    wire [31:0] lb_addr;
+    wire [31:0] lb_wdata;
+    reg         lb_wrack = 0;
+    reg [31:0]  lb_rdata = 0;
+    reg         lb_valid = 0;
+    reg [31:0]  lb_ram  [0:255];
+
+    always @(posedge clk) begin
+        lb_ram[lb_addr] <= lb_wren ? lb_wdata : lb_ram[lb_addr];
+        lb_wrack <= lb_wren;
+        lb_valid <= lb_rden;
+        lb_rdata <= lb_rden ? lb_ram[lb_addr] : lb_rdata;
+    end
 
     // Funct to ASCII string function (returns mnemonic with suffix)
     function [47:0] Opcode_ascii(
@@ -249,79 +245,96 @@ module simple_cpu_tb();
         // Program memory interface
         .prog_addr      (prog_addr),
         .prog_data      (prog_data),
+
+        .lb_rden        (lb_rden),
+        .lb_wren        (lb_wren),
+        .lb_addr        (lb_addr),
+        .lb_wdata       (lb_wdata),
+        .lb_wrack       (lb_wrack),
+        .lb_rdata       (lb_rdata),
+        .lb_valid       (lb_valid)
         
-        // AXI4-Lite Master Interface (Write Address)
-        .m_axi_awvalid  (m_axi_awvalid),
-        .m_axi_awready  (m_axi_awready),
-        .m_axi_awaddr   (m_axi_awaddr),
+        // // AXI4-Lite Master Interface (Write Address)
+        // .m_axi_awvalid  (m_axi_awvalid),
+        // .m_axi_awready  (m_axi_awready),
+        // .m_axi_awaddr   (m_axi_awaddr),
         
-        // AXI4-Lite Master Interface (Write Data)
-        .m_axi_wvalid   (m_axi_wvalid),
-        .m_axi_wready   (m_axi_wready),
-        .m_axi_wdata    (m_axi_wdata),
-        .m_axi_wstrb    (m_axi_wstrb),
+        // // AXI4-Lite Master Interface (Write Data)
+        // .m_axi_wvalid   (m_axi_wvalid),
+        // .m_axi_wready   (m_axi_wready),
+        // .m_axi_wdata    (m_axi_wdata),
+        // .m_axi_wstrb    (m_axi_wstrb),
         
-        // AXI4-Lite Master Interface (Write Response)
-        .m_axi_bvalid   (m_axi_bvalid),
-        .m_axi_bready   (m_axi_bready),
-        .m_axi_bresp    (m_axi_bresp),
+        // // AXI4-Lite Master Interface (Write Response)
+        // .m_axi_bvalid   (m_axi_bvalid),
+        // .m_axi_bready   (m_axi_bready),
+        // .m_axi_bresp    (m_axi_bresp),
         
-        // AXI4-Lite Master Interface (Read Address)
-        .m_axi_arvalid  (m_axi_arvalid),
-        .m_axi_arready  (m_axi_arready),
-        .m_axi_araddr   (m_axi_araddr),
+        // // AXI4-Lite Master Interface (Read Address)
+        // .m_axi_arvalid  (m_axi_arvalid),
+        // .m_axi_arready  (m_axi_arready),
+        // .m_axi_araddr   (m_axi_araddr),
         
-        // AXI4-Lite Master Interface (Read Data)
-        .m_axi_rvalid   (m_axi_rvalid),
-        .m_axi_rready   (m_axi_rready),
-        .m_axi_rresp    (m_axi_rresp),
-        .m_axi_rdata    (m_axi_rdata)
+        // // AXI4-Lite Master Interface (Read Data)
+        // .m_axi_rvalid   (m_axi_rvalid),
+        // .m_axi_rready   (m_axi_rready),
+        // .m_axi_rresp    (m_axi_rresp),
+        // .m_axi_rdata    (m_axi_rdata)
     );
 
     // Instantiate Program Memory (ROM)
-    hello_world rom_inst (
+    inst_test rom_inst (
         .prog_addr      (prog_addr),
         .prog_data      (prog_data)
     );
 
     // Instantiate AXI4-Lite Slave (for data memory)
-    s_axi_lite #(
-        .AXI_DATA_WIDTH (32),
-        .AXI_ADDR_WIDTH (6)
-    ) s_axi_inst (
-        .S_AXI_ACLK     (clk),
-        .S_AXI_ARESETN  (rst_n),
+    // s_axi_lite #(
+    //     .AXI_DATA_WIDTH (32),
+    //     .AXI_ADDR_WIDTH (6)
+    // ) s_axi_inst (
+    //     .S_AXI_ACLK     (clk),
+    //     .S_AXI_ARESETN  (rst_n),
 
-        .monitor        (monitor),
+    //     .monitor        (monitor),
         
-        // Write Address Channel
-        .S_AXI_AWADDR   (m_axi_awaddr[5:0]),
-        .S_AXI_AWPROT   (3'b000),
-        .S_AXI_AWVALID  (m_axi_awvalid),
-        .S_AXI_AWREADY  (m_axi_awready),
+    //     // Write Address Channel
+    //     .S_AXI_AWADDR   (m_axi_awaddr[5:0]),
+    //     .S_AXI_AWPROT   (3'b000),
+    //     .S_AXI_AWVALID  (m_axi_awvalid),
+    //     .S_AXI_AWREADY  (m_axi_awready),
         
-        // Write Data Channel
-        .S_AXI_WDATA    (m_axi_wdata),
-        .S_AXI_WSTRB    (m_axi_wstrb),
-        .S_AXI_WVALID   (m_axi_wvalid),
-        .S_AXI_WREADY   (m_axi_wready),
+    //     // Write Data Channel
+    //     .S_AXI_WDATA    (m_axi_wdata),
+    //     .S_AXI_WSTRB    (m_axi_wstrb),
+    //     .S_AXI_WVALID   (m_axi_wvalid),
+    //     .S_AXI_WREADY   (m_axi_wready),
         
-        // Write Response Channel
-        .S_AXI_BRESP    (m_axi_bresp),
-        .S_AXI_BVALID   (m_axi_bvalid),
-        .S_AXI_BREADY   (m_axi_bready),
+    //     // Write Response Channel
+    //     .S_AXI_BRESP    (m_axi_bresp),
+    //     .S_AXI_BVALID   (m_axi_bvalid),
+    //     .S_AXI_BREADY   (m_axi_bready),
         
-        // Read Address Channel
-        .S_AXI_ARADDR   (m_axi_araddr[5:0]),
-        .S_AXI_ARPROT   (3'b000),
-        .S_AXI_ARVALID  (m_axi_arvalid),
-        .S_AXI_ARREADY  (m_axi_arready),
+    //     // Read Address Channel
+    //     .S_AXI_ARADDR   (m_axi_araddr[5:0]),
+    //     .S_AXI_ARPROT   (3'b000),
+    //     .S_AXI_ARVALID  (m_axi_arvalid),
+    //     .S_AXI_ARREADY  (m_axi_arready),
         
-        // Read Data Channel
-        .S_AXI_RDATA    (m_axi_rdata),
-        .S_AXI_RRESP    (m_axi_rresp),
-        .S_AXI_RVALID   (m_axi_rvalid),
-        .S_AXI_RREADY   (m_axi_rready)
-    );
+    //     // Read Data Channel
+    //     .S_AXI_RDATA    (m_axi_rdata),
+    //     .S_AXI_RRESP    (m_axi_rresp),
+    //     .S_AXI_RVALID   (m_axi_rvalid),
+    //     .S_AXI_RREADY   (m_axi_rready)
+    // );
+
+    initial begin
+        $dumpfile("simple_cpu_tb.vcd");
+        $dumpvars(0, simple_cpu_tb);
+    end
+
+    initial begin
+        #10000 $finish;
+    end
 
 endmodule
