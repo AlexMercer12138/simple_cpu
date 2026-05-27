@@ -10,7 +10,7 @@
 //
 //--------------------------------------------------------------------------------
 //  Author      : Mercer
-//  Module      : Simple CPU
+//  Module      : MERC32
 //  Description : Lightweight 32-bit RISC CPU Core
 //  Wechat      : zxw895674551
 //  Email       : alexmercer@outlook.com
@@ -23,7 +23,7 @@
 //================================================================================
 
 
-module simple_cpu(
+module merc32_core(
     input                               clk,
     input                               rst_n,
 

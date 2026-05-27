@@ -68,7 +68,7 @@ module lb2apb #(
     input   [LB_ADDR_WIDTH-1:0]         lb_addr,
     output  [LB_DATA_WIDTH-1:0]         lb_rdata,
     output                              lb_valid,
-    output                              lb_wack,
+    output                              lb_wrack,
 
     output                              m_apb_psel,
     output                              m_apb_penable,

@@ -1,11 +1,11 @@
 {
-  "name": "sass-asm-syntax",
-  "displayName": "SASS Assembly Syntax",
-  "description": "Syntax highlighting, snippets and assembler integration for SASS (Simple CPU Assembler)",
+  "name": "merc32-asm",
+  "displayName": "MERC32 Assembly",
+  "description": "Syntax highlighting, snippets and assembler integration for MERC32 Assembly",
   "version": "2.0.0",
   "publisher": "Vikai-mercer",
   "icon": "images/icon.png",
-  "repository": "https://github.com/AlexMercer12138/simple_cpu",
+  "repository": "https://github.com/AlexMercer12138/MERC32",
   "engines": {
     "vscode": "^1.74.0"
   },
@@ -15,21 +15,21 @@
   "keywords": [
     "assembly",
     "assembler",
-    "sass",
+    "merc32",
     "cpu",
     "verilog"
   ],
   "activationEvents": [
-    "onLanguage:sass-asm"
+    "onLanguage:merc32-asm"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "languages": [
       {
-        "id": "sass-asm",
+        "id": "merc32-asm",
         "aliases": [
-          "SASS Assembly",
-          "sass-asm"
+          "MERC32 Assembly",
+          "merc32-asm"
         ],
         "extensions": [
           ".asm"
@@ -39,35 +39,35 @@
     ],
     "grammars": [
       {
-        "language": "sass-asm",
-        "scopeName": "source.sass-asm",
-        "path": "./syntaxes/sass-asm.tmLanguage.json"
+        "language": "merc32-asm",
+        "scopeName": "source.merc32-asm",
+        "path": "./syntaxes/merc32-asm.tmLanguage.json"
       }
     ],
     "snippets": [
       {
-        "language": "sass-asm",
-        "path": "./snippets/sass-asm.json"
+        "language": "merc32-asm",
+        "path": "./snippets/merc32-asm.json"
       }
     ],
     "commands": [
       {
-        "command": "sass-asm.compile",
+        "command": "merc32-asm.compile",
         "title": "Compile",
         "icon": "$(play)"
       },
       {
-        "command": "sass-asm.compilePrint",
+        "command": "merc32-asm.compilePrint",
         "title": "Compile (Print Mode)",
         "icon": "$(output)"
       },
       {
-        "command": "sass-asm.compileDebug",
+        "command": "merc32-asm.compileDebug",
         "title": "Compile (Debug Mode)",
         "icon": "$(bug)"
       },
       {
-        "command": "sass-asm.selectCompileMode",
+        "command": "merc32-asm.selectCompileMode",
         "title": "Select Compile Mode",
         "icon": "$(chevron-down)"
       }
@@ -76,20 +76,20 @@
       "editor/title": [
         {
           "when": "resourceExtname == .asm",
-          "command": "sass-asm.compile",
+          "command": "merc32-asm.compile",
           "group": "navigation@1"
         },
         {
           "when": "resourceExtname == .asm",
-          "command": "sass-asm.selectCompileMode",
+          "command": "merc32-asm.selectCompileMode",
           "group": "navigation@2"
         }
       ]
     },
     "configuration": {
-      "title": "SASS Assembler",
+      "title": "MERC32 Assembler",
       "properties": {
-        "sass-asm.outputFormat": {
+        "merc32-asm.outputFormat": {
           "type": "string",
           "default": "verilog",
           "enum": [
@@ -108,7 +108,7 @@
           ],
           "description": "Default output format for the assembler"
         },
-        "sass-asm.outputPath": {
+        "merc32-asm.outputPath": {
           "type": "string",
           "default": "",
           "description": "Custom output directory (leave empty to use same directory as source file)"

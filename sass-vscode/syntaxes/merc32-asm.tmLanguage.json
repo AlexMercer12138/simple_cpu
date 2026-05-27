@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "SASS Assembly",
-  "scopeName": "source.sass-asm",
+  "name": "MERC32 Assembly",
+  "scopeName": "source.merc32-asm",
   "patterns": [
     {
       "include": "#comments"
@@ -17,7 +17,12 @@
     "comments": {
       "patterns": [
         {
-          "name": "comment.line.double-slash.sass-asm",
+          "name": "comment.block.merc32-asm",
+          "begin": "/\\*",
+          "end": "\\*/"
+        },
+        {
+          "name": "comment.line.double-slash.merc32-asm",
           "match": "//.*$"
         }
       ]
@@ -25,11 +30,11 @@
     "labels": {
       "patterns": [
         {
-          "name": "entity.name.label.sass-asm",
+          "name": "entity.name.label.merc32-asm",
           "match": "^[\\s\\t]*([a-zA-Z_][a-zA-Z0-9_]*)\\s*:",
           "captures": {
             "1": {
-              "name": "entity.name.label.sass-asm"
+              "name": "entity.name.label.merc32-asm"
             }
           }
         }
@@ -51,14 +56,14 @@
     "mov-instruction": {
       "patterns": [
         {
-          "name": "meta.instruction.mov.sass-asm",
+          "name": "meta.instruction.mov.merc32-asm",
           "begin": "\\b(MOV)\\b",
           "beginCaptures": {
             "1": {
-              "name": "keyword.control.mov.sass-asm"
+              "name": "keyword.control.mov.merc32-asm"
             }
           },
-          "end": "(?=//)|$",
+          "end": "(?=//)|(?=/\*)|$",
           "patterns": [
             {
               "include": "#comments"
@@ -79,14 +84,14 @@
     "jmp-instruction": {
       "patterns": [
         {
-          "name": "meta.instruction.jmp.sass-asm",
+          "name": "meta.instruction.jmp.merc32-asm",
           "begin": "\\b(JMP)\\b",
           "beginCaptures": {
             "1": {
-              "name": "keyword.control.jmp.sass-asm"
+              "name": "keyword.control.jmp.merc32-asm"
             }
           },
-          "end": "(?=//)|$",
+          "end": "(?=//)|(?=/\*)|$",
           "patterns": [
             {
               "include": "#comments"
@@ -101,14 +106,14 @@
     "brc-instruction": {
       "patterns": [
         {
-          "name": "meta.instruction.brc.sass-asm",
+          "name": "meta.instruction.brc.merc32-asm",
           "begin": "\\b(BRC)\\b",
           "beginCaptures": {
             "1": {
-              "name": "keyword.control.brc.sass-asm"
+              "name": "keyword.control.brc.merc32-asm"
             }
           },
-          "end": "(?=//)|$",
+          "end": "(?=//)|(?=/\*)|$",
           "patterns": [
             {
               "include": "#comments"
@@ -126,33 +131,33 @@
           "match": "(R1[0-5]|R[0-9])\\s*,\\s*(R1[0-5]|R[0-9])\\s*(==|!=|<|>=)\\s*(R1[0-5]|R[0-9])",
           "captures": {
             "1": {
-              "name": "variable.other.register.sass-asm"
+              "name": "variable.other.register.merc32-asm"
             },
             "2": {
-              "name": "variable.other.register.sass-asm"
+              "name": "variable.other.register.merc32-asm"
             },
             "3": {
-              "name": "keyword.operator.comparison.sass-asm"
+              "name": "keyword.operator.comparison.merc32-asm"
             },
             "4": {
-              "name": "variable.other.register.sass-asm"
+              "name": "variable.other.register.merc32-asm"
             }
           }
         },
         {
-          "match": "(#-?[0-9]+|#0[xX][0-9a-fA-F]+|#0[bB][01]+)\\s*,\\s*(R1[0-5]|R[0-9])\\s*(==|!=|<|>=)\\s*(R1[0-5]|R[0-9])",
+          "match": "(-?[0-9]+|0[xX][0-9a-fA-F]+|0[bB][01]+)\\s*,\\s*(R1[0-5]|R[0-9])\\s*(==|!=|<|>=)\\s*(R1[0-5]|R[0-9])",
           "captures": {
             "1": {
-              "name": "constant.numeric.immediate.sass-asm"
+              "name": "constant.numeric.immediate.merc32-asm"
             },
             "2": {
-              "name": "variable.other.register.sass-asm"
+              "name": "variable.other.register.merc32-asm"
             },
             "3": {
-              "name": "keyword.operator.comparison.sass-asm"
+              "name": "keyword.operator.comparison.merc32-asm"
             },
             "4": {
-              "name": "variable.other.register.sass-asm"
+              "name": "variable.other.register.merc32-asm"
             }
           }
         },
@@ -160,16 +165,16 @@
           "match": "([a-zA-Z_][a-zA-Z0-9_]*)\\s*,\\s*(R1[0-5]|R[0-9])\\s*(==|!=|<|>=)\\s*(R1[0-5]|R[0-9])",
           "captures": {
             "1": {
-              "name": "entity.name.label.sass-asm"
+              "name": "entity.name.label.merc32-asm"
             },
             "2": {
-              "name": "variable.other.register.sass-asm"
+              "name": "variable.other.register.merc32-asm"
             },
             "3": {
-              "name": "keyword.operator.comparison.sass-asm"
+              "name": "keyword.operator.comparison.merc32-asm"
             },
             "4": {
-              "name": "variable.other.register.sass-asm"
+              "name": "variable.other.register.merc32-asm"
             }
           }
         }
@@ -178,17 +183,17 @@
     "memory-access": {
       "patterns": [
         {
-          "name": "meta.memory-access.sass-asm",
-          "match": "\\[\\s*(R1[0-5]|R[0-9])\\s*(?:\\+\\s*(R1[0-5]|R[0-9]|#-?[0-9]+|#0[xX][0-9a-fA-F]+|#0[bB][01]+))?\\s*\\]",
+          "name": "meta.memory-access.merc32-asm",
+          "match": "\\[\\s*(R1[0-5]|R[0-9])\\s*(?:\\+\\s*(R1[0-5]|R[0-9]|-?[0-9]+|0[xX][0-9a-fA-F]+|0[bB][01]+))?\\s*\\]",
           "captures": {
             "1": {
-              "name": "variable.other.register.sass-asm"
+              "name": "variable.other.register.merc32-asm"
             },
             "2": {
-              "name": "variable.other.register.sass-asm"
+              "name": "variable.other.register.merc32-asm"
             },
             "3": {
-              "name": "constant.numeric.immediate.sass-asm"
+              "name": "constant.numeric.immediate.merc32-asm"
             }
           }
         }
@@ -197,20 +202,32 @@
     "alu-operation": {
       "patterns": [
         {
-          "name": "meta.alu-operation.sass-asm",
-          "match": "(R1[0-5]|R[0-9])\\s*(\\+|\\-|&|\\||\\^|<<|>>|>>>)\\s*(R1[0-5]|R[0-9]|#-?[0-9]+|#0[xX][0-9a-fA-F]+|#0[bB][01]+)",
+          "name": "meta.alu-operation.merc32-asm",
+          "match": "(R1[0-5]|R[0-9])\\s*(\\+|\\-|&|\\||\\^|<<|>>|>>>)\\s*(-?[0-9]+|0[xX][0-9a-fA-F]+|0[bB][01]+)",
           "captures": {
             "1": {
-              "name": "variable.other.register.sass-asm"
+              "name": "variable.other.register.merc32-asm"
             },
             "2": {
-              "name": "keyword.operator.arithmetic.sass-asm"
+              "name": "keyword.operator.arithmetic.merc32-asm"
             },
             "3": {
-              "name": "variable.other.register.sass-asm"
+              "name": "constant.numeric.immediate.merc32-asm"
+            }
+          }
+        },
+        {
+          "name": "meta.alu-operation.merc32-asm",
+          "match": "(R1[0-5]|R[0-9])\\s*(\\+|\\-|&|\\||\\^|<<|>>|>>>)\\s*(R1[0-5]|R[0-9])",
+          "captures": {
+            "1": {
+              "name": "variable.other.register.merc32-asm"
             },
-            "4": {
-              "name": "constant.numeric.immediate.sass-asm"
+            "2": {
+              "name": "keyword.operator.arithmetic.merc32-asm"
+            },
+            "3": {
+              "name": "variable.other.register.merc32-asm"
             }
           }
         }
@@ -219,31 +236,31 @@
     "operands": {
       "patterns": [
         {
-          "name": "variable.other.register.sass-asm",
+          "name": "variable.other.register.merc32-asm",
           "match": "\\bR1[0-5]\\b"
         },
         {
-          "name": "variable.other.register.sass-asm",
+          "name": "variable.other.register.merc32-asm",
           "match": "\\bR[0-9]\\b"
         },
         {
-          "name": "constant.numeric.hex.sass-asm",
-          "match": "#0[xX][0-9a-fA-F]+"
+          "name": "constant.numeric.hex.merc32-asm",
+          "match": "\\b0[xX][0-9a-fA-F]+\\b"
         },
         {
-          "name": "constant.numeric.binary.sass-asm",
-          "match": "#0[bB][01]+"
+          "name": "constant.numeric.binary.merc32-asm",
+          "match": "\\b0[bB][01]+\\b"
         },
         {
-          "name": "constant.numeric.immediate.sass-asm",
-          "match": "#-?[0-9]+"
+          "name": "constant.numeric.immediate.merc32-asm",
+          "match": "\\b-?[0-9]+\\b"
         },
         {
-          "name": "entity.name.label.sass-asm",
+          "name": "entity.name.label.merc32-asm",
           "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
         },
         {
-          "name": "punctuation.separator.comma.sass-asm",
+          "name": "punctuation.separator.comma.merc32-asm",
           "match": ","
         }
       ]

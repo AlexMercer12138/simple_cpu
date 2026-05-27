@@ -1,4 +1,4 @@
-# Simple CPU
+# MERC32
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Verilog](https://img.shields.io/badge/Language-Verilog-blue.svg)](https://en.wikipedia.org/wiki/Verilog)
@@ -33,10 +33,12 @@
 ```
 CPU/
 ├── rtl/                          # RTL源代码
-│   ├── simple_cpu.v              # CPU核心代码 - 32位RISC处理器实现
+│   ├── core.v                    # CPU核心代码 - 32位RISC处理器实现
+│   ├── MERC32_top.v              # 顶层封装 - 多种总线接口支持
 │   ├── s_axi_lite.v              # AXI4-Lite从机接口模块 - 用于外设寄存器访问
 │   ├── hello_world.v             # Hello World程序存储器初始化模块
-│   └── simple_cpu_tb.v           # CPU测试平台 - 带指令追踪功能
+│   ├── inst_test.v               # 指令测试程序存储器初始化模块
+│   └── core_tb.v                # CPU测试平台 - 带指令追踪功能
 ├── sass-vscode/                  # VSCode 汇编器扩展
 │   ├── src/                      # TypeScript 源码
 │   │   ├── assembler.ts          # 内置汇编器实现
@@ -163,7 +165,7 @@ vsce package
 安装 VSIX：
 
 ```bash
-code --install-extension sass-asm-syntax-2.0.0.vsix
+code --install-extension merc32-asm-2.0.0.vsix
 ```
 
 ### 使用方式
@@ -177,17 +179,17 @@ code --install-extension sass-asm-syntax-2.0.0.vsix
 
 | 设置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `sass-asm.outputFormat` | `verilog` | 输出格式，可选 `verilog`、`coe`、`mif`、`hex`、`bin` |
-| `sass-asm.outputPath` | 空 | 自定义输出目录；为空时输出到 `.asm` 同目录 |
+| `merc32-asm.outputFormat` | `verilog` | 输出格式，可选 `verilog`、`coe`、`mif`、`hex`、`bin` |
+| `merc32-asm.outputPath` | 空 | 自定义输出目录；为空时输出到 `.asm` 同目录 |
 
 ### 汇编示例
 
 ```asm
 // 计算 1+2+3+4 = 10
 start:
-    MOV R0, #0
-    MOV R1, #1
-    MOV R2, #2
+    MOV R0, 0
+    MOV R1, 1
+    MOV R2, 2
     MOV R3, R1 + R2      // R3 = 3
     MOV [R0], R3         // Mem[0] = R3
 loop:

@@ -1,4 +1,4 @@
-// Simple CPU Program Memory Initialization
+// MERC32 CPU Program Memory Initialization
 module hello_world(
     input wire [15:0] prog_addr,
     output reg [31:0] prog_data

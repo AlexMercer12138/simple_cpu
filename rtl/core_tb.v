@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module simple_cpu_tb();
+module merc32_core_tb();
 
     localparam  OP_IMMEDIATE            = 4'b0001;
     localparam  OP_REGISTER             = 4'b0010;
@@ -237,8 +237,8 @@ module simple_cpu_tb();
         end
     end
 
-    // Instantiate Simple CPU
-    simple_cpu cpu_inst (
+    // Instantiate MERC32
+    merc32_core cpu_inst (
         .clk            (clk),
         .rst_n          (rst_n),
         
@@ -329,8 +329,8 @@ module simple_cpu_tb();
     // );
 
     initial begin
-        $dumpfile("simple_cpu_tb.vcd");
-        $dumpvars(0, simple_cpu_tb);
+        $dumpfile("merc32_core_tb.vcd");
+        $dumpvars(0, merc32_core_tb);
     end
 
     initial begin

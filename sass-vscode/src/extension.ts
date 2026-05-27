@@ -6,12 +6,12 @@ import { assembleFile } from './assembler';
 let currentMode: 'normal' | 'print' | 'debug' = 'normal';
 
 function getOutputFormat(): 'verilog' | 'coe' | 'mif' | 'hex' | 'bin' {
-    const config = vscode.workspace.getConfiguration('sass-asm');
+    const config = vscode.workspace.getConfiguration('merc32-asm');
     return config.get('outputFormat', 'verilog');
 }
 
 function getOutputDir(sourceFile: string): string {
-    const config = vscode.workspace.getConfiguration('sass-asm');
+    const config = vscode.workspace.getConfiguration('merc32-asm');
     const customPath = config.get<string>('outputPath', '');
     if (customPath) {
         const resolved = path.resolve(customPath);
@@ -30,8 +30,8 @@ function getActiveAsmFile(): string | null {
         return null;
     }
     const doc = editor.document;
-    if (doc.languageId !== 'sass-asm' && !doc.fileName.endsWith('.asm')) {
-        vscode.window.showWarningMessage('当前文件不是 SASS 汇编文件');
+    if (doc.languageId !== 'merc32-asm' && !doc.fileName.endsWith('.asm')) {
+        vscode.window.showWarningMessage('当前文件不是 MERC32 汇编文件');
         return null;
     }
     return doc.fileName;
@@ -44,7 +44,7 @@ function runAssembly(file: string, mode: 'normal' | 'print' | 'debug') {
         const outputDir = getOutputDir(file);
         const result = assembleFile(sourceCode, file, format, mode, outputDir);
 
-        const channel = vscode.window.createOutputChannel('SASS Assembler');
+        const channel = vscode.window.createOutputChannel('MERC32 Assembler');
 
         if (mode === 'print') {
             channel.clear();
@@ -70,7 +70,7 @@ function runAssembly(file: string, mode: 'normal' | 'print' | 'debug') {
     } catch (error: any) {
         const message = error.message || String(error);
         vscode.window.showErrorMessage(`汇编失败: ${message}`);
-        const channel = vscode.window.createOutputChannel('SASS Assembler');
+        const channel = vscode.window.createOutputChannel('MERC32 Assembler');
         channel.clear();
         channel.appendLine(message);
         channel.show(true);
@@ -78,28 +78,28 @@ function runAssembly(file: string, mode: 'normal' | 'print' | 'debug') {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    const compileCmd = vscode.commands.registerCommand('sass-asm.compile', () => {
+    const compileCmd = vscode.commands.registerCommand('merc32-asm.compile', () => {
         const file = getActiveAsmFile();
         if (file) {
             runAssembly(file, currentMode);
         }
     });
 
-    const compilePrintCmd = vscode.commands.registerCommand('sass-asm.compilePrint', () => {
+    const compilePrintCmd = vscode.commands.registerCommand('merc32-asm.compilePrint', () => {
         const file = getActiveAsmFile();
         if (file) {
             runAssembly(file, 'print');
         }
     });
 
-    const compileDebugCmd = vscode.commands.registerCommand('sass-asm.compileDebug', () => {
+    const compileDebugCmd = vscode.commands.registerCommand('merc32-asm.compileDebug', () => {
         const file = getActiveAsmFile();
         if (file) {
             runAssembly(file, 'debug');
         }
     });
 
-    const selectModeCmd = vscode.commands.registerCommand('sass-asm.selectCompileMode', async () => {
+    const selectModeCmd = vscode.commands.registerCommand('merc32-asm.selectCompileMode', async () => {
         const items = [
             { label: '$(play) 正常模式', description: '编译并输出文件', value: 'normal' as const },
             { label: '$(output) 打印模式', description: '编译结果输出到面板', value: 'print' as const },

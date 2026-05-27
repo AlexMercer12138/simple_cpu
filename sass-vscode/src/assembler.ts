@@ -46,6 +46,19 @@ export class SimpleCPUAssembler {
     private errors: string[] = [];
 
     removeComments(line: string): string {
+        // 移除行内块注释 /* ... */
+        while (true) {
+            const startIdx = line.indexOf('/*');
+            if (startIdx === -1) break;
+            const endIdx = line.indexOf('*/', startIdx + 2);
+            if (endIdx === -1) {
+                // 块注释未闭合，删除从 /* 开始到行尾
+                line = line.substring(0, startIdx);
+                break;
+            }
+            line = line.substring(0, startIdx) + line.substring(endIdx + 2);
+        }
+        // 移除行注释 //
         const idx = line.indexOf('//');
         if (idx !== -1) {
             line = line.substring(0, idx);
@@ -82,9 +95,6 @@ export class SimpleCPUAssembler {
 
     parseImmediate(immStr: string, bits: number = 16): number {
         immStr = immStr.trim();
-        if (immStr.startsWith('#')) {
-            immStr = immStr.substring(1);
-        }
 
         const isHex = immStr.toLowerCase().startsWith('0x');
         const isBin = immStr.toLowerCase().startsWith('0b');
@@ -119,6 +129,17 @@ export class SimpleCPUAssembler {
             value = value & ((1 << bits) - 1);
         }
         return value;
+    }
+
+    isImmediate(token: string): boolean {
+        token = token.trim();
+        if (token.toLowerCase().startsWith('0x')) {
+            return /^0[xX][0-9a-fA-F]+$/.test(token);
+        }
+        if (token.toLowerCase().startsWith('0b')) {
+            return /^0[bB][01]+$/.test(token);
+        }
+        return /^-?\d+$/.test(token);
     }
 
     tokenizeOperands(operandStr: string): string[] {
@@ -174,7 +195,8 @@ export class SimpleCPUAssembler {
                 i += 2;
                 continue;
             }
-            if (c === '#' && i + 1 < operandStr.length && '+-'.includes(operandStr[i + 1])) {
+
+            if (c === '0' && i + 1 < operandStr.length && 'xXbB'.includes(operandStr[i + 1])) {
                 if (current.trim()) {
                     tokens.push(current.trim());
                     current = "";
@@ -184,6 +206,17 @@ export class SimpleCPUAssembler {
                 current += operandStr[i];
                 i++;
                 while (i < operandStr.length && (/[a-zA-Z0-9]/.test(operandStr[i]) || 'xXbB'.includes(operandStr[i]))) {
+                    current += operandStr[i];
+                    i++;
+                }
+                tokens.push(current);
+                current = "";
+                continue;
+            }
+            if (/\d/.test(c) && current === "") {
+                current += c;
+                i++;
+                while (i < operandStr.length && /\d/.test(operandStr[i])) {
                     current += operandStr[i];
                     i++;
                 }
@@ -204,6 +237,20 @@ export class SimpleCPUAssembler {
                 if (current.trim()) {
                     tokens.push(current.trim());
                     current = "";
+                }
+                // 检查是否是带符号数字的一部分（如 -1, +10, -0xAB, +0b11）
+                if (i + 1 < operandStr.length && (/\d/.test(operandStr[i + 1]) || operandStr[i + 1] === '0')) {
+                    current += c;
+                    i++;
+                    current += operandStr[i];
+                    i++;
+                    while (i < operandStr.length && (/[a-zA-Z0-9]/.test(operandStr[i]) || 'xXbB'.includes(operandStr[i]))) {
+                        current += operandStr[i];
+                        i++;
+                    }
+                    tokens.push(current);
+                    current = "";
+                    continue;
                 }
                 tokens.push(c);
                 i++;
@@ -254,12 +301,12 @@ export class SimpleCPUAssembler {
         const srcStr = operands[1];
         const tokens = this.tokenizeOperands(srcStr);
 
-        if (tokens.length === 1 && tokens[0].startsWith('#')) {
+        if (tokens.length === 1 && this.isImmediate(tokens[0])) {
             return { instType: InstructionType.SET, operands: [destReg, tokens[0]], lineNum, lineContent };
         }
 
         if (tokens.length === 1 && /^[Rr]\d+$/.test(tokens[0])) {
-            return { instType: InstructionType.ADD, operands: [destReg, tokens[0], '#0'], lineNum, lineContent };
+            return { instType: InstructionType.ADD, operands: [destReg, tokens[0], '0'], lineNum, lineContent };
         }
 
         if (tokens.length >= 3 && tokens[0] === '[') {
@@ -268,7 +315,7 @@ export class SimpleCPUAssembler {
             }
             tokens.shift();
             if (tokens.length === 1) {
-                return { instType: InstructionType.MRD, operands: [destReg, tokens[0], '#0'], lineNum, lineContent };
+                return { instType: InstructionType.MRD, operands: [destReg, tokens[0], '0'], lineNum, lineContent };
             } else if (tokens.length === 3 && tokens[1] === '+') {
                 return { instType: InstructionType.MRD, operands: [destReg, tokens[0], tokens[2]], lineNum, lineContent };
             } else {
@@ -411,13 +458,13 @@ export class SimpleCPUAssembler {
 
         for (const op of rawOperands) {
             if (!op) continue;
-            if (op.startsWith('#')) {
+            if (this.isImmediate(op)) {
                 newOperands.push(op);
             } else if (this.isValidRegister(op)) {
                 newOperands.push(op);
             } else if (this.symbols.has(op)) {
                 const addr = this.symbols.get(op)!;
-                newOperands.push(`#${addr}`);
+                newOperands.push(`${addr}`);
             } else {
                 newOperands.push(op);
             }
@@ -445,7 +492,7 @@ export class SimpleCPUAssembler {
             const rd = this.parseRegister(ops[0]);
             const rs2 = this.parseRegister(ops[1]);
             const third = ops[2];
-            if (third.startsWith('#')) {
+            if (this.isImmediate(third)) {
                 const imm = this.parseImmediate(third, 16);
                 return (imm << 16) | (rs2 << 12) | (rd << 8) | (OPCODE_I << 4) | type;
             } else {
@@ -461,8 +508,8 @@ export class SimpleCPUAssembler {
             }
             const rsBase = this.parseRegister(baseStr);
             const rd = this.parseRegister(ops[1]);
-            const offsetStr = ops[2] || '#0';
-            if (offsetStr.startsWith('#')) {
+            const offsetStr = ops[2] || '0';
+            if (this.isImmediate(offsetStr)) {
                 const imm = this.parseImmediate(offsetStr, 16);
                 return (imm << 16) | (rsBase << 12) | (rd << 8) | (OPCODE_I << 4) | type;
             } else {
@@ -474,8 +521,8 @@ export class SimpleCPUAssembler {
         if (type === InstructionType.MRD) {
             const rd = this.parseRegister(ops[0]);
             const rsBase = this.parseRegister(ops[1]);
-            const offsetStr = ops[2] || '#0';
-            if (offsetStr.startsWith('#')) {
+            const offsetStr = ops[2] || '0';
+            if (this.isImmediate(offsetStr)) {
                 const imm = this.parseImmediate(offsetStr, 16);
                 return (imm << 16) | (rsBase << 12) | (rd << 8) | (OPCODE_I << 4) | type;
             } else {
@@ -487,14 +534,14 @@ export class SimpleCPUAssembler {
         if (type === InstructionType.JAL) {
             const target = ops[0];
             const rd = this.parseRegister(ops[1]);
-            if (target.startsWith('#')) {
+            if (this.isImmediate(target)) {
                 const imm = this.parseImmediate(target, 16);
                 return (imm << 16) | (rd << 8) | (OPCODE_I << 4) | type;
             } else if (this.isValidRegister(target)) {
                 const rs1 = this.parseRegister(target);
                 return (rs1 << 16) | (rd << 8) | (OPCODE_R << 4) | type;
             } else {
-                throw new Error(`无效的跳转目标: ${target} (应为#立即数或寄存器)`);
+                throw new Error(`无效的跳转目标: ${target} (应为立即数或寄存器)`);
             }
         }
 
@@ -502,14 +549,14 @@ export class SimpleCPUAssembler {
             const target = ops[0];
             const rs2 = this.parseRegister(ops[1]);
             const rd = this.parseRegister(ops[2]);
-            if (target.startsWith('#')) {
+            if (this.isImmediate(target)) {
                 const imm = this.parseImmediate(target, 16);
                 return (imm << 16) | (rs2 << 12) | (rd << 8) | (OPCODE_I << 4) | type;
             } else if (this.isValidRegister(target)) {
                 const rs1 = this.parseRegister(target);
                 return (rs1 << 16) | (rs2 << 12) | (rd << 8) | (OPCODE_R << 4) | type;
             } else {
-                throw new Error(`无效的分支目标: ${target} (应为#立即数或寄存器)`);
+                throw new Error(`无效的分支目标: ${target} (应为立即数或寄存器)`);
             }
         }
 
@@ -517,13 +564,48 @@ export class SimpleCPUAssembler {
     }
 
     assemble(sourceCode: string): AssemblyResult {
-        const lines = sourceCode.split('\n');
+        const rawLines = sourceCode.split('\n');
         this.symbols = new Map();
         this.errors = [];
 
+        // 第一遍：处理跨行块注释，生成清理后的行
+        const lines: string[] = [];
+        let inBlockComment = false;
+        for (let i = 0; i < rawLines.length; i++) {
+            let line = rawLines[i];
+            if (inBlockComment) {
+                const endIdx = line.indexOf('*/');
+                if (endIdx !== -1) {
+                    line = line.substring(endIdx + 2);
+                    inBlockComment = false;
+                } else {
+                    lines.push('');
+                    continue;
+                }
+            }
+            // 处理行内块注释和开始新块注释
+            while (true) {
+                const startIdx = line.indexOf('/*');
+                if (startIdx === -1) break;
+                const endIdx = line.indexOf('*/', startIdx + 2);
+                if (endIdx === -1) {
+                    line = line.substring(0, startIdx);
+                    inBlockComment = true;
+                    break;
+                }
+                line = line.substring(0, startIdx) + line.substring(endIdx + 2);
+            }
+            // 移除行注释 //
+            const lineCommentIdx = line.indexOf('//');
+            if (lineCommentIdx !== -1) {
+                line = line.substring(0, lineCommentIdx);
+            }
+            lines.push(line);
+        }
+
         let instructionCount = 0;
         for (let lineNum = 1; lineNum <= lines.length; lineNum++) {
-            const cleanLine = this.removeComments(lines[lineNum - 1]);
+            const cleanLine = lines[lineNum - 1].trim();
             if (!cleanLine) continue;
             const [label, code] = this.extractLabel(cleanLine);
             if (label) {
@@ -550,7 +632,7 @@ export class SimpleCPUAssembler {
         for (let lineNum = 1; lineNum <= lines.length; lineNum++) {
             try {
                 const newLine = this.replaceLabels(lines[lineNum - 1]);
-                processedLines.push({ lineNum, processed: newLine, original: lines[lineNum - 1] });
+                processedLines.push({ lineNum, processed: newLine, original: rawLines[lineNum - 1] });
             } catch (e: any) {
                 this.errors.push(`第 ${lineNum} 行错误: ${e.message}`);
             }
@@ -563,7 +645,7 @@ export class SimpleCPUAssembler {
         const replacedCodeLines: string[] = [];
         let pc = 0;
         for (const { processed } of processedLines) {
-            const cleanLine = this.removeComments(processed);
+            const cleanLine = processed.trim();
             if (!cleanLine) continue;
             const [label, code] = this.extractLabel(cleanLine);
             if (label) {

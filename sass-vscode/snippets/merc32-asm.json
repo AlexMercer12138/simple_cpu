@@ -2,7 +2,7 @@
   "MOV Immediate": {
     "prefix": "movi",
     "body": [
-      "MOV ${1:Rd}, #${2:imm}"
+      "MOV ${1:Rd}, ${2:imm}"
     ],
     "description": "MOV with immediate value"
   },
@@ -16,28 +16,28 @@
   "MOV ALU I-Type": {
     "prefix": "movalu",
     "body": [
-      "MOV ${1:Rd}, ${2:Rs} ${3:+} #${4:imm}"
+      "MOV ${1:Rd}, ${2:Rs} ${3:+} ${4:imm}"
     ],
     "description": "MOV with ALU operation (immediate)"
   },
   "MOV Load": {
     "prefix": "movl",
     "body": [
-      "MOV ${1:Rd}, [${2:Rs} + #${3:offset}]"
+      "MOV ${1:Rd}, [${2:Rs} + ${3:offset}]"
     ],
     "description": "Load from memory"
   },
   "MOV Store": {
     "prefix": "movs",
     "body": [
-      "MOV [${1:Rs} + #${2:offset}], ${3:Rd}"
+      "MOV [${1:Rs} + ${2:offset}], ${3:Rd}"
     ],
     "description": "Store to memory"
   },
   "JMP Immediate": {
     "prefix": "jmpi",
     "body": [
-      "JMP ${1:Rd}, #${2:addr}"
+      "JMP ${1:Rd}, ${2:addr}"
     ],
     "description": "Jump to immediate address"
   },
