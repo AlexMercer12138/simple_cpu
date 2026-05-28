@@ -31,10 +31,10 @@ xpr/
 *~
 
 # VSCode Extension
-sass-vscode/node_modules/
-sass-vscode/out/
-sass-vscode/package-lock.json
-sass-vscode/*.vsix
+assembler/node_modules/
+assembler/out/
+assembler/package-lock.json
+assembler/*.vsix
 
 # OS
 .DS_Store

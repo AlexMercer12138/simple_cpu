@@ -18,9 +18,9 @@
 
 - 🚀 **单周期执行** - 大多数指令在一个指令周期完成
 - 📦 **资源占用少** - 适合FPGA实现，逻辑资源消耗低
-- 🔌 **AXI4-Lite接口** - 标准总线接口，便于集成到ARM/SoC系统
+- 🔌 **支持多接口** - 支持 AMBA 标准总线接口，便于集成到ARM/SoC系统
 - 📝 **灵活指令集** - 16种功能 × 2种寻址方式 = 32条指令
-- 🔄 **三级流水线** - 取指、执行和跳转阶段串行处理
+- 🔄 **中断控制器** - 支持软件配置中断使能，中断触发方式，中断向量
 - 🔢 **有符号数支持** - 原生支持有符号数运算和比较
 - 🎨 **VSCode 汇编器扩展** - 集成汇编、语法高亮、代码片段、编译按钮和多格式输出
 
@@ -31,30 +31,12 @@
 ### 文件结构
 
 ```
-CPU/
+MERC32/
+├── assembler/                    # VSCode 汇编器扩展
+├── example/                      # 示例程序
 ├── rtl/                          # RTL源代码
-│   ├── core.v                    # CPU核心代码 - 32位RISC处理器实现
-│   ├── MERC32_top.v              # 顶层封装 - 多种总线接口支持
-│   ├── s_axi_lite.v              # AXI4-Lite从机接口模块 - 用于外设寄存器访问
-│   ├── hello_world.v             # Hello World程序存储器初始化模块
-│   ├── inst_test.v               # 指令测试程序存储器初始化模块
-│   └── core_tb.v                # CPU测试平台 - 带指令追踪功能
-├── sass-vscode/                  # VSCode 汇编器扩展
-│   ├── src/                      # TypeScript 源码
-│   │   ├── assembler.ts          # 内置汇编器实现
-│   │   └── extension.ts          # VSCode 扩展入口
-│   ├── syntaxes/                 # 语法高亮定义
-│   ├── snippets/                 # 代码片段
-│   ├── language-configuration/   # 语言配置
-│   ├── package.json              # 扩展配置
-│   ├── tsconfig.json             # TypeScript 编译配置
-│   └── README.md                 # 扩展市场页说明
-├── example/                      # 示例汇编程序
-│   ├── hello_world.asm           # Hello World滑动窗口演示程序
-│   └── inst_test.asm             # 全指令集测试程序
 ├── ISA.md                        # 指令集参考文档
 ├── LICENSE                       # MIT许可证
-├── .gitignore                    # Git忽略规则
 └── README.md                     # 项目介绍
 ```
 
@@ -64,18 +46,23 @@ CPU/
 |------|------|------|------|
 | `clk` | Input | 1 | 系统时钟 |
 | `rst_n` | Input | 1 | 低电平有效复位 |
+| `interrupt` | Input | 1 | 中断请求信号 |
+| `prog_load` | Output | 1 | 程序加载（连接 rom 的 en） |
 | `prog_addr` | Output | 16 | 程序地址（65536条指令） |
 | `prog_data` | Input | 32 | 程序数据（指令） |
 
-**AXI4-Lite主接口**
+**标准总线接口**
 
-| 通道 | 信号 | 方向 | 位宽 | 描述 |
-|------|------|------|------|------|
-| 写地址 | `m_axi_awvalid/awready/awaddr` | master | 1/1/32 | 写地址通道 |
-| 写数据 | `m_axi_wvalid/wready/wdata/wstrb` | master | 1/1/32/4 | 写数据通道 |
-| 写响应 | `m_axi_bvalid/bready/bresp` | master | 1/1/2 | 写响应通道 |
-| 读地址 | `m_axi_arvalid/arready/araddr` | master | 1/1/32 | 读地址通道 |
-| 读数据 | `m_axi_rvalid/rready/rresp/rdata` | master | 1/1/2/32 | 读数据通道 |
+通过编译宏选择总线接口（优先级从高到低）：
+
+| 宏定义 | 总线类型 | 说明 |
+|--------|---------|------|
+| `IF_AXI_LITE` | AXI4-Lite | AMBA标准总线，ARM/SoC常用 |
+| `IF_APB` | APB | AMBA外设总线 |
+| `IF_WBC` | Wishbone | 开源总线标准 |
+| `IF_AVALON` | Avalon-MM | Intel FPGA总线接口 |
+| `IF_DRP` | DRP | Xilinx动态重配置端口 |
+| 默认 | Local Bus | 本地总线直连 |
 
 ---
 
@@ -134,7 +121,7 @@ CPU/
 
 ## 🛠️ VSCode 汇编器扩展
 
-项目现在使用 `sass-vscode` 作为唯一汇编器入口，汇编逻辑已集成在 VSCode 扩展中，无需额外解释器环境。扩展会在打开 `.asm` 文件时提供语法支持和右上角编译按钮。
+项目现在使用 `assembler` 作为唯一汇编器入口，汇编逻辑已集成在 VSCode 扩展中，无需额外解释器环境。扩展会在打开 `.asm` 文件时提供语法支持和右上角编译按钮。
 
 ### 扩展功能
 
@@ -148,17 +135,17 @@ CPU/
 ### 安装与开发
 
 ```bash
-cd sass-vscode
+cd assembler
 npm install
 npx tsc
 ```
 
-本地开发调试可在 VSCode 中打开 `sass-vscode` 目录，并以扩展开发模式启动。
+本地开发调试可在 VSCode 中打开 `assembler` 目录，并以扩展开发模式启动。
 
 如需生成 VSIX 安装包：
 
 ```bash
-cd sass-vscode
+cd assembler
 vsce package
 ```
 
@@ -182,31 +169,7 @@ code --install-extension merc32-asm-2.0.0.vsix
 | `merc32-asm.outputFormat` | `verilog` | 输出格式，可选 `verilog`、`coe`、`mif`、`hex`、`bin` |
 | `merc32-asm.outputPath` | 空 | 自定义输出目录；为空时输出到 `.asm` 同目录 |
 
-### 汇编示例
-
-```asm
-// 计算 1+2+3+4 = 10
-start:
-    MOV R0, 0
-    MOV R1, 1
-    MOV R2, 2
-    MOV R3, R1 + R2      // R3 = 3
-    MOV [R0], R3         // Mem[0] = R3
-loop:
-    JMP loop, R4         // 无限循环
-```
-
-### 支持的输出格式
-
-| 格式 | 扩展名 | 说明 |
-|------|--------|------|
-| Verilog | `.v` | 完整的ROM模块 |
-| COE | `.coe` | Xilinx FPGA 内存初始化 |
-| MIF | `.mif` | Altera/Intel FPGA 内存初始化 |
-| HEX | `.hex` | Intel HEX文件 |
-| BIN | `.bin` | 二进制文件 |
-
-详细扩展说明见 [sass-vscode/README.md](sass-vscode/README.md)。
+详细扩展说明见 [assembler/README.md](assembler/README.md)。
 
 ---
 
@@ -226,37 +189,14 @@ loop:
 - **16个32位有符号寄存器** (`regi_int[0:15]`)
 - 复位后，16个寄存器初始化为值 `0`
 
-#### 寄存器使用约定
+### 寄存器使用约定
 
 | 寄存器 | 用途 | 说明 |
 |--------|------|------|
 | `R0` | 零寄存器 | 固定为0，**不可写入** |
-| `R1-R15` | 通用寄存器 | 可自由使用，包括作为JMP链接寄存器 |
-
----
-
-## 📊 技术规格
-
-| 特性 | 参数 |
-|------|------|
-| 架构 | 32位 RISC |
-| 寄存器数量 | 16个有符号通用寄存器 |
-| 指令宽度 | 32位 |
-| 指令数量 | 32条（16种功能 × 2种寻址方式） |
-| 数据通路 | 单周期执行 |
-| 内存接口 | AXI4-Lite |
-| 程序存储 | 65536条指令（16位地址） |
-| 时间刻度 | 1ns / 1ps |
-| 有符号数支持 | 原生支持 |
-
----
-
-## ⚠️ 已知限制
-
-- 程序存储有限 - 16位地址仅支持65536条指令
-- 无硬件乘法/除法 - 需软件实现复杂运算
-- 无中断支持 - 需要外部中断控制器
-- 无调试接口 - 需要时序仿真验证程序正确性
+| `R1` | 中断控制寄存器 | R1[0]=中断使能，R1[2:1]=中断触发类型 |
+| `R2` | 中断向量寄存器 | R2[31:16]=中断跳转地址，R2[15:0]=中断返回地址 |
+| `R3-R15` | 通用寄存器 | 可自由使用 |
 
 ---
 
@@ -277,7 +217,7 @@ loop:
 ## 📚 相关文档
 
 - [指令集参考](ISA.md) - 完整的指令集说明
-- [VSCode 汇编器扩展](sass-vscode/README.md) - 扩展安装、使用和市场页说明
+- [VSCode 汇编器扩展](assembler/README.md) - 扩展安装、使用和市场页说明
 
 ---
 

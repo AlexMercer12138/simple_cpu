@@ -58,7 +58,7 @@ MOV R4, [R0]            // R4 = Mem[R0]
 
 // 1. 跳转到立即数地址
 MOV R0, 0
-JMP 20, R1             // R1 = PC+1, PC = 20
+JMP 38, R1             // R1 = PC+1, PC = 38
 
 // 2. 跳转到标签
 jmp_test:
@@ -127,7 +127,7 @@ MOV R0, 100
 MOV R1, 100
 
 // 测试相等条件 - 立即数跳转
-BRC 60, R0 == R1       // if (R0 == R1) PC = 60
+BRC 68, R0 == R1       // if (R0 == R1) PC = 68
 MOV R1, 0
 
 // 由于立即数跳转需要知道地址，这里我们跳过后续几条指令
@@ -137,7 +137,7 @@ MOV R2, 0
 
 // 3. BRC 标签跳转 - 使用标签形式的循环
 MOV R0, 1
-MOV R1, 1
+MOV R1, 10
 
 brc_loop_start:
 MOV R0, R0 + 1
