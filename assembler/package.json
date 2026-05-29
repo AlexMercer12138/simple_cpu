@@ -124,6 +124,7 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
+    "test:pseudo": "npm run compile && node scripts/test-pseudo-instructions.js",
     "watch": "tsc -watch -p ./"
   }
 }

@@ -77,6 +77,35 @@ Simple CPU 采用精简指令集（RISC）架构，共支持 **32条指令**（1
 
 ## 指令列表
 
+### 伪指令
+
+汇编器在预编译阶段支持以下伪指令：
+
+| 伪指令 | 说明 |
+|--------|------|
+| `.equ name [value]` | 定义常量宏或仅定义符号；表达式中只能使用常量宏和立即数 |
+| `.prog name` | 定义输出文件名；Verilog 输出时也作为 module 名 |
+| `.ifdef/.elsif/.else/.endif` | 按宏是否已定义进行条件编译 |
+| `.macro name(a, b, ...)/.endm` | 定义带参数代码段宏 |
+| `.include "file.asm"` | 将引用文件按声明顺序追加到主文件后一起汇编 |
+| `.rept count/.endr` | 重复展开代码块 |
+
+```asm
+.prog demo
+.equ base 0x10
+.equ target base + 4
+
+.macro set(rd, value)
+    mov rd, value
+.endm
+
+.ifdef target
+.rept 2
+    set(r1, target)
+.endr
+.endif
+```
+
 ### 1. 数据传送指令
 
 #### SETI - 设置立即数 (I-Type)
@@ -89,7 +118,7 @@ Simple CPU 采用精简指令集（RISC）架构，共支持 **32条指令**（1
 
 **汇编示例：**
 ```
-MOV R5, 100       // R5 = 100
+mov r5, 100       // r5 = 100
 ```
 
 #### SETR - 寄存器移动 (R-Type)
@@ -102,7 +131,7 @@ MOV R5, 100       // R5 = 100
 
 **汇编示例：**
 ```
-MOV R5, R3         // R5 = R3
+mov r5, r3         // r5 = r3
 ```
 
 ---
@@ -119,7 +148,7 @@ MOV R5, R3         // R5 = R3
 
 **汇编示例：**
 ```
-MOV R3, R1 + 10    // R3 = R1 + 10
+mov r3, r1 + 10    // r3 = r1 + 10
 ```
 
 #### ADDR - 寄存器加法 (R-Type)
@@ -132,7 +161,7 @@ MOV R3, R1 + 10    // R3 = R1 + 10
 
 **汇编示例：**
 ```
-MOV R3, R1 + R2     // R3 = R1 + R2
+mov r3, r1 + r2     // r3 = r1 + r2
 ```
 
 #### SUBI - 立即数减法 (I-Type)
@@ -145,7 +174,7 @@ MOV R3, R1 + R2     // R3 = R1 + R2
 
 **汇编示例：**
 ```
-MOV R3, R5 - 5     // R3 = R5 - 5
+mov r3, r5 - 5     // r3 = r5 - 5
 ```
 
 #### SUBR - 寄存器减法 (R-Type)
@@ -158,7 +187,7 @@ MOV R3, R5 - 5     // R3 = R5 - 5
 
 **汇编示例：**
 ```
-MOV R3, R5 - R2     // R3 = R5 - R2
+mov r3, r5 - r2     // r3 = r5 - r2
 ```
 
 ---
@@ -174,7 +203,7 @@ MOV R3, R5 - R2     // R3 = R5 - R2
 
 **汇编示例：**
 ```
-MOV R4, R7 & 0xFF  // R4 = R7 & 0xFF
+mov r4, r7 & 0xFF  // r4 = r7 & 0xFF
 ```
 
 #### ANDR - 寄存器按位与 (R-Type)
@@ -186,7 +215,7 @@ MOV R4, R7 & 0xFF  // R4 = R7 & 0xFF
 
 **汇编示例：**
 ```
-MOV R4, R7 & R3     // R4 = R7 & R3
+mov r4, r7 & r3     // r4 = r7 & r3
 ```
 
 #### ORI - 立即数按位或 (I-Type)
@@ -198,7 +227,7 @@ MOV R4, R7 & R3     // R4 = R7 & R3
 
 **汇编示例：**
 ```
-MOV R4, R7 | 0xFF   // R4 = R7 | 0xFF
+mov r4, r7 | 0xFF   // r4 = r7 | 0xFF
 ```
 
 #### ORR - 寄存器按位或 (R-Type)
@@ -210,7 +239,7 @@ MOV R4, R7 | 0xFF   // R4 = R7 | 0xFF
 
 **汇编示例：**
 ```
-MOV R4, R7 | R3     // R4 = R7 | R3
+mov r4, r7 | r3     // r4 = r7 | r3
 ```
 
 #### XORI - 立即数按位异或 (I-Type)
@@ -222,7 +251,7 @@ MOV R4, R7 | R3     // R4 = R7 | R3
 
 **汇编示例：**
 ```
-MOV R4, R7 ^ 0xFF  // R4 = R7 ^ 0xFF
+mov r4, r7 ^ 0xFF  // r4 = r7 ^ 0xFF
 ```
 
 #### XORR - 寄存器按位异或 (R-Type)
@@ -234,7 +263,7 @@ MOV R4, R7 ^ 0xFF  // R4 = R7 ^ 0xFF
 
 **汇编示例：**
 ```
-MOV R4, R7 ^ R3     // R4 = R7 ^ R3
+mov r4, r7 ^ r3     // r4 = r7 ^ r3
 ```
 
 ---
@@ -251,7 +280,7 @@ MOV R4, R7 ^ R3     // R4 = R7 ^ R3
 
 **汇编示例：**
 ```
-MOV R3, R4 << 4     // R3 = R4 << 4
+mov r3, r4 << 4     // r3 = r4 << 4
 ```
 
 #### SLLR - 寄存器逻辑左移 (R-Type)
@@ -264,7 +293,7 @@ MOV R3, R4 << 4     // R3 = R4 << 4
 
 **汇编示例：**
 ```
-MOV R3, R4 << R1     // R3 = R4 << R1
+mov r3, r4 << r1     // r3 = r4 << r1
 ```
 
 #### SRLI - 立即数逻辑右移 (I-Type)
@@ -277,7 +306,7 @@ MOV R3, R4 << R1     // R3 = R4 << R1
 
 **汇编示例：**
 ```
-MOV R3, R4 >> 4     // R3 = R4 >> 4
+mov r3, r4 >> 4     // r3 = r4 >> 4
 ```
 
 #### SRLR - 寄存器逻辑右移 (R-Type)
@@ -290,7 +319,7 @@ MOV R3, R4 >> 4     // R3 = R4 >> 4
 
 **汇编示例：**
 ```
-MOV R3, R4 >> R1     // R3 = R4 >> R1
+mov r3, r4 >> r1     // r3 = r4 >> r1
 ```
 
 #### SRAI - 立即数算术右移 (I-Type)
@@ -303,7 +332,7 @@ MOV R3, R4 >> R1     // R3 = R4 >> R1
 
 **汇编示例：**
 ```
-MOV R3, R4 >>> 4     // R3 = R4 >>> 4 (有符号右移)
+mov r3, r4 >>> 4     // r3 = r4 >>> 4 (有符号右移)
 ```
 
 #### SRAR - 寄存器算术右移 (R-Type)
@@ -316,7 +345,7 @@ MOV R3, R4 >>> 4     // R3 = R4 >>> 4 (有符号右移)
 
 **汇编示例：**
 ```
-MOV R3, R4 >>> R1     // R3 = R4 >>> R1 (有符号右移)
+mov r3, r4 >>> r1     // r3 = r4 >>> r1 (有符号右移)
 ```
 
 ---
@@ -333,7 +362,7 @@ MOV R3, R4 >>> R1     // R3 = R4 >>> R1 (有符号右移)
 
 **汇编示例：**
 ```
-MOV [R1 + 4], R5   // Mem[R1 + 4] = R5
+mov [r1 + 4], r5   // Mem[r1 + 4] = r5
 ```
 
 #### MWRR - 寄存器偏移内存写 (R-Type)
@@ -346,7 +375,7 @@ MOV [R1 + 4], R5   // Mem[R1 + 4] = R5
 
 **汇编示例：**
 ```
-MOV [R1 + R2], R5   // Mem[R1 + R2] = R5
+mov [r1 + r2], r5   // Mem[r1 + r2] = r5
 ```
 
 #### MRDI - 立即数偏移内存读 (I-Type)
@@ -359,7 +388,7 @@ MOV [R1 + R2], R5   // Mem[R1 + R2] = R5
 
 **汇编示例：**
 ```
-MOV R3, [R7 + 8]   // R3 = Mem[R7 + 8]
+mov r3, [r7 + 8]   // r3 = Mem[r7 + 8]
 ```
 
 #### MRDR - 寄存器偏移内存读 (R-Type)
@@ -372,7 +401,7 @@ MOV R3, [R7 + 8]   // R3 = Mem[R7 + 8]
 
 **汇编示例：**
 ```
-MOV R3, [R7 + R2]   // R3 = Mem[R7 + R2]
+mov r3, [r7 + r2]   // r3 = Mem[r7 + r2]
 ```
 
 ---
@@ -389,7 +418,7 @@ MOV R3, [R7 + R2]   // R3 = Mem[R7 + R2]
 
 **汇编示例：**
 ```
-JMP 100, R6    // R6 = PC + 1, PC = 100
+jmp 100, r6    // r6 = PC + 1, PC = 100
 ```
 
 #### JALR - 寄存器跳转并链接 (R-Type)
@@ -402,7 +431,7 @@ JMP 100, R6    // R6 = PC + 1, PC = 100
 
 **汇编示例：**
 ```
-JMP R10, R6     // R6 = PC + 1, PC = R10
+jmp r10, r6     // r6 = PC + 1, PC = r10
 ```
 
 ---
@@ -421,7 +450,7 @@ JMP R10, R6     // R6 = PC + 1, PC = R10
 
 **汇编示例：**
 ```
-BRC loop, R5 == R3     // if (R5 == R3) PC = loop else PC = PC + 1
+brc loop, r5 == r3     // if (r5 == r3) PC = loop else PC = PC + 1
 ```
 
 #### BEQR - 寄存器相等分支 (R-Type)
@@ -434,7 +463,7 @@ BRC loop, R5 == R3     // if (R5 == R3) PC = loop else PC = PC + 1
 
 **汇编示例：**
 ```
-BRC R10, R5 == R3   // if (R5 == R3) PC = R10 else PC = PC + 1
+brc r10, r5 == r3   // if (r5 == r3) PC = r10 else PC = PC + 1
 ```
 
 #### BNEI - 立即数不等分支 (I-Type)
@@ -446,7 +475,7 @@ BRC R10, R5 == R3   // if (R5 == R3) PC = R10 else PC = PC + 1
 
 **汇编示例：**
 ```
-BRC loop, R5 != R3  // if (R5 != R3) PC = loop else PC = PC + 1
+brc loop, r5 != r3  // if (r5 != r3) PC = loop else PC = PC + 1
 ```
 
 #### BNER - 寄存器不等分支 (R-Type)
@@ -458,7 +487,7 @@ BRC loop, R5 != R3  // if (R5 != R3) PC = loop else PC = PC + 1
 
 **汇编示例：**
 ```
-BRC R10, R5 != R3   // if (R5 != R3) PC = R10 else PC = PC + 1
+brc r10, r5 != r3   // if (r5 != r3) PC = r10 else PC = PC + 1
 ```
 
 #### BLTI - 立即数小于分支 (I-Type)
@@ -471,7 +500,7 @@ BRC R10, R5 != R3   // if (R5 != R3) PC = R10 else PC = PC + 1
 
 **汇编示例：**
 ```
-BRC loop, R5 < R3   // if ($signed(R5) < $signed(R3)) PC = loop else PC = PC + 1
+brc loop, r5 < r3   // if ($signed(r5) < $signed(r3)) PC = loop else PC = PC + 1
 ```
 
 #### BLTR - 寄存器小于分支 (R-Type)
@@ -484,7 +513,7 @@ BRC loop, R5 < R3   // if ($signed(R5) < $signed(R3)) PC = loop else PC = PC + 1
 
 **汇编示例：**
 ```
-BRC R10, R5 < R3    // if ($signed(R5) < $signed(R3)) PC = R10 else PC = PC + 1
+brc r10, r5 < r3    // if ($signed(r5) < $signed(r3)) PC = r10 else PC = PC + 1
 ```
 
 #### BGEI - 立即数大于等于分支 (I-Type)
@@ -497,7 +526,7 @@ BRC R10, R5 < R3    // if ($signed(R5) < $signed(R3)) PC = R10 else PC = PC + 1
 
 **汇编示例：**
 ```
-BRC loop, R5 >= R3  // if ($signed(R5) >= $signed(R3)) PC = loop else PC = PC + 1
+brc loop, r5 >= r3  // if ($signed(r5) >= $signed(r3)) PC = loop else PC = PC + 1
 ```
 
 #### BGER - 寄存器大于等于分支 (R-Type)
@@ -510,7 +539,7 @@ BRC loop, R5 >= R3  // if ($signed(R5) >= $signed(R3)) PC = loop else PC = PC + 
 
 **汇编示例：**
 ```
-BRC R10, R5 >= R3   // if ($signed(R5) >= $signed(R3)) PC = R10 else PC = PC + 1
+brc r10, r5 >= r3   // if ($signed(r5) >= $signed(r3)) PC = r10 else PC = PC + 1
 ```
 
 ---

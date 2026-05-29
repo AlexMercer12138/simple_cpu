@@ -26,13 +26,14 @@
 uart_rx #(
     .SYS_CLK_FREQ              (50_000_000     ),
     .BAUD_RATE                 (115200         ),
-    .PARITY_TYPE               (2              ))
+    .PARITY_TYPE               ("none"         ))
 u_uart_rx (
     .clk                       (clk            ),
     .rst_n                     (rst_n          ),
 
-    .dvld                      (dvld           ),
-    .dout                      (dout           ),
+    .rx_valid                  (rx_valid       ),
+    .rx_ready                  (rx_ready       ),
+    .rx_data                   (rx_data        ),
 
     .uart_rx                   (uart_rx        ));
 */

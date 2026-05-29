@@ -27,15 +27,14 @@ uart_tx #(
     .SYS_CLK_FREQ              (50_000_000     ),
     .BAUD_RATE                 (115200         ),
     .STOP_BIT_CNT              (1              ),
-    .PARITY_CODE               (2              ),
-    .TRIGGER_TYPE              ("HIGH"         ))
+    .PARITY_TYPE               ("none"         ))
 u_uart_tx (
     .clk                       (clk            ),
     .rst_n                     (rst_n          ),
 
-    .dreq                      (dreq           ),
-    .din                       (din            ),
-    .tx_start                  (tx_start       ),
+    .tx_valid                  (tx_valid       ),
+    .tx_ready                  (tx_ready       ),
+    .tx_data                   (tx_data        ),
 
     .uart_tx                   (uart_tx        ));
 */

@@ -12,8 +12,8 @@ export function assembleFile(
     outputDir?: string,
 ): FileAssemblyResult {
     const assembler = new SimpleCPUAssembler();
-    const result = assembler.assemble(sourceCode);
-    const baseName = path.basename(sourceFileName, path.extname(sourceFileName));
+    const result = assembler.assemble(sourceCode, { sourceFileName });
+    const baseName = result.programName || path.basename(sourceFileName, path.extname(sourceFileName));
     const output = formatAssemblyOutput(result.machineCodes, format, baseName);
 
     if (mode === 'print') {

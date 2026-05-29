@@ -1,4 +1,5 @@
 import { AssemblyDebugInfo } from './types';
+import { AssemblerPreprocessor, PreprocessOptions } from './preprocessor';
 
 type NumericRadix = 2 | 10 | 16;
 
@@ -35,7 +36,7 @@ function parseNumericLiteral(token: string): NumericLiteral | undefined {
 }
 
 function parseRegisterIndex(regStr: string): number | undefined {
-    const match = regStr.trim().toUpperCase().match(/^R(\d+)$/);
+    const match = regStr.trim().match(/^r(\d+)$/);
     if (!match) {
         return undefined;
     }
@@ -82,6 +83,8 @@ export interface ParsedLine {
 
 export interface AssemblyResult extends AssemblyDebugInfo {
     machineCodes: number[];
+    programName?: string;
+    preprocessedCode: string;
 }
 
 export class SimpleCPUAssembler {
@@ -123,16 +126,16 @@ export class SimpleCPUAssembler {
     }
 
     parseRegister(regStr: string): number {
-        regStr = regStr.trim().toUpperCase();
-        if (!/^R\d+$/.test(regStr)) {
-            throw new Error(`无效的寄存器格式: ${regStr} (应为 Rx)`);
+        regStr = regStr.trim();
+        if (!/^r\d+$/.test(regStr)) {
+            throw new Error(`无效的寄存器格式: ${regStr} (应为 rx)`);
         }
 
         const num = parseRegisterIndex(regStr);
         if (num !== undefined) {
             return num;
         }
-        throw new Error(`寄存器编号越界: ${regStr} (应为 R0-R15)`);
+        throw new Error(`寄存器编号越界: ${regStr} (应为 r0-r15)`);
     }
 
     parseImmediate(immStr: string, bits: number = 16): number {
@@ -297,7 +300,7 @@ export class SimpleCPUAssembler {
 
     parseMov(operands: string[], lineNum: number, lineContent: string): Instruction {
         if (operands.length < 1) {
-            throw new Error("MOV指令需要操作数");
+            throw new Error("mov 指令需要操作数");
         }
 
         const firstOp = operands[0].trim();
@@ -305,7 +308,7 @@ export class SimpleCPUAssembler {
             const addrStr = firstOp;
             const dataReg = operands[1]?.trim();
             if (!dataReg) {
-                throw new Error("MOV内存写需要数据寄存器: MOV [addr], Rd");
+                throw new Error("mov 内存写需要数据寄存器: mov [addr], rd");
             }
             const addrTokens = this.tokenizeOperands(addrStr);
             if (addrTokens[0] === '[') {
@@ -315,7 +318,7 @@ export class SimpleCPUAssembler {
                 addrTokens.pop();
             }
             if (addrTokens.length === 1) {
-                return { instType: InstructionType.MWR, operands: [`[${addrTokens[0]}]`, dataReg, 'R0'], lineNum, lineContent };
+                return { instType: InstructionType.MWR, operands: [`[${addrTokens[0]}]`, dataReg, 'r0'], lineNum, lineContent };
             } else if (addrTokens.length === 3 && addrTokens[1] === '+') {
                 return { instType: InstructionType.MWR, operands: [`[${addrTokens[0]}]`, dataReg, addrTokens[2]], lineNum, lineContent };
             } else {
@@ -324,7 +327,7 @@ export class SimpleCPUAssembler {
         }
 
         if (operands.length < 2) {
-            throw new Error("MOV指令需要至少2个操作数: MOV Rd, src");
+            throw new Error("mov 指令需要至少 2 个操作数: mov rd, src");
         }
 
         const destReg = operands[0];
@@ -335,7 +338,7 @@ export class SimpleCPUAssembler {
             return { instType: InstructionType.SET, operands: [destReg, tokens[0]], lineNum, lineContent };
         }
 
-        if (tokens.length === 1 && /^[Rr]\d+$/.test(tokens[0])) {
+        if (tokens.length === 1 && /^r\d+$/.test(tokens[0])) {
             return { instType: InstructionType.ADD, operands: [destReg, tokens[0], '0'], lineNum, lineContent };
         }
 
@@ -374,26 +377,26 @@ export class SimpleCPUAssembler {
             }
         }
 
-        throw new Error(`无法识别的MOV格式: ${srcStr}`);
+        throw new Error(`无法识别的 mov 格式: ${srcStr}`);
     }
 
     parseJmp(operands: string[], lineNum: number, lineContent: string): Instruction {
         if (operands.length !== 2) {
-            throw new Error("JMP指令需要2个操作数: JMP target, Rd");
+            throw new Error("jmp 指令需要 2 个操作数: jmp target, rd");
         }
         return { instType: InstructionType.JAL, operands: [operands[0], operands[1]], lineNum, lineContent };
     }
 
     parseBrc(operands: string[], lineNum: number, lineContent: string): Instruction {
         if (operands.length < 2) {
-            throw new Error("BRC指令格式错误，应为: BRC target, Rs2 op Rs1");
+            throw new Error("brc 指令格式错误，应为: brc target, rs2 op rs1");
         }
         const target = operands[0];
         const conditionStr = operands.slice(1).join(' ');
         const tokens = this.tokenizeOperands(conditionStr);
 
         if (tokens.length < 3) {
-            throw new Error("BRC指令条件表达式格式错误");
+            throw new Error("brc 指令条件表达式格式错误");
         }
 
         let opIdx = -1;
@@ -405,7 +408,7 @@ export class SimpleCPUAssembler {
         }
 
         if (opIdx === -1 || opIdx === 0 || opIdx + 1 >= tokens.length) {
-            throw new Error("BRC指令缺少比较运算符或操作数");
+            throw new Error("brc 指令缺少比较运算符或操作数");
         }
 
         let rs2 = tokens[opIdx - 1];
@@ -446,19 +449,19 @@ export class SimpleCPUAssembler {
         }
 
         const parts = code.split(/\s+/);
-        const mnemonic = parts[0].toUpperCase();
+        const mnemonic = parts[0];
         const operandStr = parts.slice(1).join(' ');
         const operands = operandStr.split(',').map(s => s.trim()).filter(s => s);
 
         let inst: Instruction;
-        if (mnemonic === 'MOV') {
+        if (mnemonic === 'mov') {
             inst = this.parseMov(operands, lineNum, line);
-        } else if (mnemonic === 'JMP') {
+        } else if (mnemonic === 'jmp') {
             inst = this.parseJmp(operands, lineNum, line);
-        } else if (mnemonic === 'BRC') {
+        } else if (mnemonic === 'brc') {
             inst = this.parseBrc(operands, lineNum, line);
         } else {
-            throw new Error(`未知指令: ${mnemonic} (只支持 MOV, JMP, BRC)`);
+            throw new Error(`未知指令: ${mnemonic} (只支持 mov, jmp, brc)`);
         }
 
         return { label, instruction: inst, lineContent: line };
@@ -481,7 +484,7 @@ export class SimpleCPUAssembler {
         const parts = codePart.split(/\s+/);
         if (parts.length === 0) return lineNoComment;
 
-        const mnemonic = parts[0].toUpperCase();
+        const mnemonic = parts[0];
         const operandsStr = parts.slice(1).join(' ');
         const rawOperands = operandsStr.split(',').map(s => s.trim()).filter(s => s);
         const newOperands: string[] = [];
@@ -593,8 +596,10 @@ export class SimpleCPUAssembler {
         throw new Error(`未实现的指令类型: ${type}`);
     }
 
-    assemble(sourceCode: string): AssemblyResult {
-        const rawLines = sourceCode.split('\n');
+    assemble(sourceCode: string, options: PreprocessOptions = {}): AssemblyResult {
+        const preprocessor = new AssemblerPreprocessor();
+        const preprocessed = preprocessor.preprocess(sourceCode, options);
+        const rawLines = preprocessed.sourceCode.split('\n');
         this.symbols = new Map();
         this.errors = [];
 
@@ -751,7 +756,14 @@ export class SimpleCPUAssembler {
             throw new Error(this.errors.join('\n'));
         }
 
-        return { machineCodes, debugCode, debugSymbols, replacedCode };
+        return {
+            machineCodes,
+            debugCode,
+            debugSymbols,
+            replacedCode,
+            programName: preprocessed.programName,
+            preprocessedCode: preprocessed.sourceCode,
+        };
     }
 
 }

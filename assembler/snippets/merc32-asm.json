@@ -1,72 +1,144 @@
 {
-  "MOV Immediate": {
-    "prefix": "movi",
+  "mov": {
+    "prefix": "mov",
     "body": [
-      "MOV ${1:Rd}, ${2:imm}"
+      "mov ${1:r1}, ${2:0}"
     ],
-    "description": "MOV with immediate value"
+    "description": "mov instruction"
   },
-  "MOV Register": {
-    "prefix": "movr",
+  "load": {
+    "prefix": "load",
     "body": [
-      "MOV ${1:Rd}, ${2:Rs}"
+      "mov ${1:r1}, [${2:r0} + ${3:0}]"
     ],
-    "description": "MOV between registers"
+    "description": "load from memory"
   },
-  "MOV ALU I-Type": {
-    "prefix": "movalu",
+  "store": {
+    "prefix": "store",
     "body": [
-      "MOV ${1:Rd}, ${2:Rs} ${3:+} ${4:imm}"
+      "mov [${1:r0} + ${2:0}], ${3:r1}"
     ],
-    "description": "MOV with ALU operation (immediate)"
+    "description": "store to memory"
   },
-  "MOV Load": {
-    "prefix": "movl",
+  "jmp": {
+    "prefix": "jmp",
     "body": [
-      "MOV ${1:Rd}, [${2:Rs} + ${3:offset}]"
+      "jmp ${1:target}, ${2:r15}"
     ],
-    "description": "Load from memory"
+    "description": "jump to target"
   },
-  "MOV Store": {
-    "prefix": "movs",
+  "brc": {
+    "prefix": "brc",
     "body": [
-      "MOV [${1:Rs} + ${2:offset}], ${3:Rd}"
+      "brc ${1:target}, ${2:r1} ${3|==,!=,<,>=|} ${4:r0}"
     ],
-    "description": "Store to memory"
+    "description": "conditional branch"
   },
-  "JMP Immediate": {
-    "prefix": "jmpi",
-    "body": [
-      "JMP ${1:Rd}, ${2:addr}"
-    ],
-    "description": "Jump to immediate address"
-  },
-  "JMP Label": {
-    "prefix": "jmpl",
-    "body": [
-      "JMP ${1:Rd}, ${2:label}"
-    ],
-    "description": "Jump to label"
-  },
-  "BRC Equal": {
-    "prefix": "brceq",
-    "body": [
-      "BRC ${1:addr}, ${2:Rd2} == ${3:Rd1}"
-    ],
-    "description": "Branch if equal"
-  },
-  "BRC Not Equal": {
-    "prefix": "brcne",
-    "body": [
-      "BRC ${1:addr}, ${2:Rd2} != ${3:Rd1}"
-    ],
-    "description": "Branch if not equal"
-  },
-  "Label": {
+  "label": {
     "prefix": "label",
     "body": [
       "${1:label}:"
     ],
-    "description": "Create a label"
+    "description": "label definition"
+  },
+  ".prog": {
+    "prefix": [
+      ".prog",
+      "prog"
+    ],
+    "body": [
+      ".prog ${1:program_name}"
+    ],
+    "description": "program output name"
+  },
+  ".equ": {
+    "prefix": [
+      ".equ",
+      "equ"
+    ],
+    "body": [
+      ".equ ${1:name} ${2:value}"
+    ],
+    "description": "constant macro definition"
+  },
+  ".equ symbol": {
+    "prefix": [
+      ".equdef",
+      "equdef"
+    ],
+    "body": [
+      ".equ ${1:symbol}"
+    ],
+    "description": "symbol-only macro definition"
+  },
+  ".ifdef": {
+    "prefix": [
+      ".ifdef",
+      "ifdef"
+    ],
+    "body": [
+      ".ifdef ${1:symbol}",
+      "    ${2:mov r1, 0}",
+      ".endif"
+    ],
+    "description": "conditional compilation block"
+  },
+  ".ifelse": {
+    "prefix": [
+      ".ifelse",
+      "ifelse"
+    ],
+    "body": [
+      ".ifdef ${1:symbol}",
+      "    ${2:mov r1, 0}",
+      ".else",
+      "    ${3:mov r1, 1}",
+      ".endif"
+    ],
+    "description": "conditional compilation block with else"
+  },
+  ".elsif": {
+    "prefix": [
+      ".elsif",
+      "elsif"
+    ],
+    "body": [
+      ".elsif ${1:symbol}"
+    ],
+    "description": "conditional compilation else-if branch"
+  },
+  ".macro": {
+    "prefix": [
+      ".macro",
+      "macro"
+    ],
+    "body": [
+      ".macro ${1:name}(${2:rd, value})",
+      "    ${3:mov rd, value}",
+      ".endm"
+    ],
+    "description": "parameterized code macro"
+  },
+  ".include": {
+    "prefix": [
+      ".include",
+      "include"
+    ],
+    "body": [
+      ".include \"${1:file.asm}\""
+    ],
+    "description": "include another assembly file"
+  },
+  ".rept": {
+    "prefix": [
+      ".rept",
+      "rept"
+    ],
+    "body": [
+      ".rept ${1:count}",
+      "    ${2:mov r1, 0}",
+      ".endr"
+    ],
+    "description": "repeat code block"
   }
 }
