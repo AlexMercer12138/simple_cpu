@@ -16,8 +16,8 @@ always @(*) begin
         8 : prog_data = 32'h00010510;
         9 : prog_data = 32'h00010510;
         10 : prog_data = 32'h00010510;
-        11 : prog_data = 32'hFFFF2513;
-        12 : prog_data = 32'h00011114;
+        11 : prog_data = 32'h00011114;
+        12 : prog_data = 32'hFFFF2513;
         13 : prog_data = 32'h00050F2B;
         default: prog_data = 0;
     endcase

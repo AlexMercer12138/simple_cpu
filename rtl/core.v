@@ -1,12 +1,12 @@
 `timescale 1ns / 1ps
 //================================================================================
 //
-//  ███╗   ███╗███████╗██████╗  ██████╗███████╗██████╗ 
-//  ████╗ ████║██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗
-//  ██╔████╔██║█████╗  ██████╔╝██║     █████╗  ██████╔╝
-//  ██║╚██╔╝██║██╔══╝  ██╔══██╗██║     ██╔══╝  ██╔══██╗
-//  ██║ ╚═╝ ██║███████╗██║  ██║╚██████╗███████╗██║  ██║
-//  ╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝  ╚═╝
+//  ███╗   ███╗███████╗██████�? ██████╗███████╗██████╗ 
+//  ████�?████║██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██�?
+//  ██╔████╔██║█████�? ██████╔╝██�?    █████╗  ██████╔╝
+//  ██║╚██╔╝██║██╔══�? ██╔══██╗██�?    ██╔══╝  ██╔══██╗
+//  ██�?╚═�?██║███████╗██║  ██║╚██████╗███████╗██║  ██�?
+//  ╚═�?    ╚═╝╚══════╝╚═╝  ╚═�?╚═════╝╚══════╝╚═╝  ╚═�?
 //
 //--------------------------------------------------------------------------------
 //  Author      : Mercer
@@ -42,8 +42,8 @@ module merc32_core(
     input                               lb_valid
     );
 
-    localparam  OP_IMMEDIATE            = 4'b0001;
-    localparam  OP_REGISTER             = 4'b0010;
+    localparam  OP_IMM                  = 4'b0001;
+    localparam  OP_REG                  = 4'b0010;
 
     localparam  FUNC_SET                = 4'b0000;
     localparam  FUNC_ADD                = 4'b0001;
@@ -68,6 +68,11 @@ module merc32_core(
     localparam  ST_STEP                 = 5'b01000;
     localparam  ST_INTR                 = 5'b10000;
 
+    localparam  TRIG_RISE               = 2'b00;
+    localparam  TRIG_FALL               = 2'b01;
+    localparam  TRIG_HIGH               = 2'b10;
+    localparam  TRIG_LOW                = 2'b11;
+
     reg     [4:0]                       cpu_state;
     reg     [15:0]                      prog_next;
 
@@ -77,42 +82,55 @@ module merc32_core(
 
     wire                                trig_en;
     wire    [1:0]                       trig_mode;
-    reg                                 intr_flag;
+    wire                                trig_hit;
     wire    [15:0]                      intr_addr;
     wire    [15:0]                      ret_addr;
 
+    reg                                 intr_ff0;
+    reg                                 intr_ff1;
+    reg                                 intr_ff2;
+    reg                                 intr_flag;
+
     reg     signed  [31:0]              regi_int    [0:15];
 
-    wire    [15:0]                      immediate;
-    wire    [3:0]                       reg_src_1;
-    wire    [3:0]                       reg_src_2;
-    wire    [3:0]                       reg_dest;
-    wire    [3:0]                       opcode;
-    wire    [3:0]                       funct;
+    wire    [15:0]                      imm;
+    wire    [3:0]                       rs1;
+    wire    [3:0]                       rs2;
+    wire    [3:0]                       rd;
+    wire    [3:0]                       opc;
+    wire    [3:0]                       fun;
 
     wire                                prog_busy;
     wire                                prog_exec;
     wire                                prog_step;
 
-    assign  immediate                   = prog_data[31:16];
-    assign  reg_src_1                   = prog_data[19:16];
-    assign  reg_src_2                   = prog_data[15:12];
-    assign  reg_dest                    = prog_data[11:8];
-    assign  opcode                      = prog_data[7:4];
-    assign  funct                       = prog_data[3:0];
+    assign  imm                         = prog_data[31:16];
+    assign  rs1                         = prog_data[19:16];
+    assign  rs2                         = prog_data[15:12];
+    assign  rd                          = prog_data[11:8];
+    assign  opc                         = prog_data[7:4];
+    assign  fun                         = prog_data[3:0];
 
     assign  prog_busy = cpu_state != ST_IDLE;
     assign  prog_load = cpu_state == ST_LOAD;
     assign  prog_exec = cpu_state == ST_EXEC;
     assign  prog_step = 
-        funct == FUNC_MWR ? lb_wrack : 
-        funct == FUNC_MRD ? lb_valid : 
+        {opc, fun} == {OP_IMM, FUNC_MWR} ? lb_wrack : 
+        {opc, fun} == {OP_REG, FUNC_MWR} ? lb_wrack : 
+        {opc, fun} == {OP_IMM, FUNC_MRD} ? lb_valid : 
+        {opc, fun} == {OP_REG, FUNC_MRD} ? lb_valid : 
         cpu_state == ST_STEP;
 
     assign  trig_en                     = regi_int[1][0];
     assign  trig_mode                   = regi_int[1][2:1];
     assign  intr_addr                   = regi_int[2][31:16];
     assign  ret_addr                    = regi_int[2][15:0];
+
+    assign trig_hit  = 
+        (trig_mode == TRIG_RISE) ?  intr_ff1 & ~intr_ff2 :
+        (trig_mode == TRIG_FALL) ? ~intr_ff1 &  intr_ff2 :
+        (trig_mode == TRIG_HIGH) ?  intr_ff2 :
+        (trig_mode == TRIG_LOW)  ? ~intr_ff2 : 1'b0;
 
     always @(posedge clk) begin
         if(!rst_n) begin
@@ -135,17 +153,17 @@ module merc32_core(
             prog_next <= 0;
         end else begin
             prog_addr <= prog_step ? (intr_flag ? intr_addr : prog_next) : prog_addr;
-            case({opcode, funct})
-                {OP_IMMEDIATE, FUNC_JAL}:prog_next <= prog_exec ? immediate : prog_next;
-                {OP_IMMEDIATE, FUNC_BEQ}:prog_next <= prog_exec ? (regi_int[reg_src_2] == regi_int[reg_dest] ? immediate : prog_addr + 1) : prog_next;
-                {OP_IMMEDIATE, FUNC_BNE}:prog_next <= prog_exec ? (regi_int[reg_src_2] != regi_int[reg_dest] ? immediate : prog_addr + 1) : prog_next;
-                {OP_IMMEDIATE, FUNC_BLT}:prog_next <= prog_exec ? ($signed(regi_int[reg_src_2]) < $signed(regi_int[reg_dest]) ? immediate : prog_addr + 1) : prog_next;
-                {OP_IMMEDIATE, FUNC_BGE}:prog_next <= prog_exec ? ($signed(regi_int[reg_src_2]) >= $signed(regi_int[reg_dest]) ? immediate : prog_addr + 1) : prog_next;
-                {OP_REGISTER, FUNC_JAL}:prog_next <= prog_exec ? regi_int[reg_src_1] : prog_next;
-                {OP_REGISTER, FUNC_BEQ}:prog_next <= prog_exec ? (regi_int[reg_src_2] == regi_int[reg_dest] ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
-                {OP_REGISTER, FUNC_BNE}:prog_next <= prog_exec ? (regi_int[reg_src_2] != regi_int[reg_dest] ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
-                {OP_REGISTER, FUNC_BLT}:prog_next <= prog_exec ? ($signed(regi_int[reg_src_2]) < $signed(regi_int[reg_dest]) ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
-                {OP_REGISTER, FUNC_BGE}:prog_next <= prog_exec ? ($signed(regi_int[reg_src_2]) >= $signed(regi_int[reg_dest]) ? regi_int[reg_src_1] : prog_addr + 1) : prog_next;
+            case({opc, fun})
+                {OP_IMM, FUNC_JAL}:prog_next <= prog_exec ? imm : prog_next;
+                {OP_IMM, FUNC_BEQ}:prog_next <= prog_exec ? (regi_int[rs2] == regi_int[rd] ? imm : prog_addr + 1) : prog_next;
+                {OP_IMM, FUNC_BNE}:prog_next <= prog_exec ? (regi_int[rs2] != regi_int[rd] ? imm : prog_addr + 1) : prog_next;
+                {OP_IMM, FUNC_BLT}:prog_next <= prog_exec ? ($signed(regi_int[rs2]) < $signed(regi_int[rd]) ? imm : prog_addr + 1) : prog_next;
+                {OP_IMM, FUNC_BGE}:prog_next <= prog_exec ? ($signed(regi_int[rs2]) >= $signed(regi_int[rd]) ? imm : prog_addr + 1) : prog_next;
+                {OP_REG, FUNC_JAL}:prog_next <= prog_exec ? regi_int[rs1] : prog_next;
+                {OP_REG, FUNC_BEQ}:prog_next <= prog_exec ? (regi_int[rs2] == regi_int[rd] ? regi_int[rs1] : prog_addr + 1) : prog_next;
+                {OP_REG, FUNC_BNE}:prog_next <= prog_exec ? (regi_int[rs2] != regi_int[rd] ? regi_int[rs1] : prog_addr + 1) : prog_next;
+                {OP_REG, FUNC_BLT}:prog_next <= prog_exec ? ($signed(regi_int[rs2]) < $signed(regi_int[rd]) ? regi_int[rs1] : prog_addr + 1) : prog_next;
+                {OP_REG, FUNC_BGE}:prog_next <= prog_exec ? ($signed(regi_int[rs2]) >= $signed(regi_int[rd]) ? regi_int[rs1] : prog_addr + 1) : prog_next;
                 default:prog_next <= prog_exec ? prog_addr + 1 : prog_next;
             endcase
         end
@@ -157,93 +175,93 @@ module merc32_core(
             alu_ptr <= 4'd0;
             alu_data <= 32'h0;
         end else if(prog_busy) begin
-            alu_ptr <= reg_dest;
-            case({opcode, funct})
-                {OP_IMMEDIATE, FUNC_SET}:begin
+            alu_ptr <= rd;
+            case({opc, fun})
+                {OP_IMM, FUNC_SET}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? immediate : alu_data;
+                    alu_data <= prog_exec ? imm : alu_data;
                 end
-                {OP_IMMEDIATE, FUNC_ADD}:begin
+                {OP_IMM, FUNC_ADD}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] + immediate : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] + imm : alu_data;
                 end
-                {OP_IMMEDIATE, FUNC_SUB}:begin
+                {OP_IMM, FUNC_SUB}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] - immediate : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] - imm : alu_data;
                 end
-                {OP_IMMEDIATE, FUNC_AND}:begin
+                {OP_IMM, FUNC_AND}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] & immediate : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] & imm : alu_data;
                 end
-                {OP_IMMEDIATE, FUNC_OR}:begin
+                {OP_IMM, FUNC_OR}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] | immediate : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] | imm : alu_data;
                 end
-                {OP_IMMEDIATE, FUNC_XOR}:begin
+                {OP_IMM, FUNC_XOR}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] ^ immediate : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] ^ imm : alu_data;
                 end
-                {OP_IMMEDIATE, FUNC_SLL}:begin
+                {OP_IMM, FUNC_SLL}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] << immediate : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] << imm : alu_data;
                 end
-                {OP_IMMEDIATE, FUNC_SRL}:begin
+                {OP_IMM, FUNC_SRL}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] >> immediate : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] >> imm : alu_data;
                 end
-                {OP_IMMEDIATE, FUNC_SRA}:begin
+                {OP_IMM, FUNC_SRA}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] >>> immediate : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] >>> imm : alu_data;
                 end
-                {OP_IMMEDIATE, FUNC_MRD}:begin
+                {OP_IMM, FUNC_MRD}:begin
                     alu_vld <= lb_valid;
                     alu_data <= lb_valid ? lb_rdata : alu_data;
                 end
-                {OP_IMMEDIATE, FUNC_JAL}:begin
+                {OP_IMM, FUNC_JAL}:begin
                     alu_vld <= prog_exec;
                     alu_data <= prog_exec ? prog_addr + 1 : alu_data;
                 end
-                {OP_REGISTER, FUNC_SET}:begin
+                {OP_REG, FUNC_SET}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_1] : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs1] : alu_data;
                 end
-                {OP_REGISTER, FUNC_ADD}:begin
+                {OP_REG, FUNC_ADD}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] + regi_int[reg_src_1] : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] + regi_int[rs1] : alu_data;
                 end
-                {OP_REGISTER, FUNC_SUB}:begin
+                {OP_REG, FUNC_SUB}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] - regi_int[reg_src_1] : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] - regi_int[rs1] : alu_data;
                 end
-                {OP_REGISTER, FUNC_AND}:begin
+                {OP_REG, FUNC_AND}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] & regi_int[reg_src_1] : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] & regi_int[rs1] : alu_data;
                 end
-                {OP_REGISTER, FUNC_OR}:begin
+                {OP_REG, FUNC_OR}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] | regi_int[reg_src_1] : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] | regi_int[rs1] : alu_data;
                 end
-                {OP_REGISTER, FUNC_XOR}:begin
+                {OP_REG, FUNC_XOR}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] ^ regi_int[reg_src_1] : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] ^ regi_int[rs1] : alu_data;
                 end
-                {OP_REGISTER, FUNC_SLL}:begin
+                {OP_REG, FUNC_SLL}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] << regi_int[reg_src_1] : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] << regi_int[rs1] : alu_data;
                 end
-                {OP_REGISTER, FUNC_SRL}:begin
+                {OP_REG, FUNC_SRL}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] >> regi_int[reg_src_1] : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] >> regi_int[rs1] : alu_data;
                 end
-                {OP_REGISTER, FUNC_SRA}:begin
+                {OP_REG, FUNC_SRA}:begin
                     alu_vld <= prog_exec;
-                    alu_data <= prog_exec ? regi_int[reg_src_2] >>> regi_int[reg_src_1] : alu_data;
+                    alu_data <= prog_exec ? regi_int[rs2] >>> regi_int[rs1] : alu_data;
                 end
-                {OP_REGISTER, FUNC_MRD}:begin
+                {OP_REG, FUNC_MRD}:begin
                     alu_vld <= lb_valid;
                     alu_data <= lb_valid ? lb_rdata : alu_data;
                 end
-                {OP_REGISTER, FUNC_JAL}:begin
+                {OP_REG, FUNC_JAL}:begin
                     alu_vld <= prog_exec;
                     alu_data <= prog_exec ? prog_addr + 1 : alu_data;
                 end
@@ -282,12 +300,16 @@ module merc32_core(
     end
 
     always @(posedge clk) begin
-        if(!rst_n) begin
+        if (!rst_n) begin
+            intr_ff0 <= 1'b0;
+            intr_ff1 <= 1'b0;
+            intr_ff2 <= 1'b0;
             intr_flag <= 1'b0;
-        end else if(prog_step) begin
-            intr_flag <= 1'b0;
-        end else if(intr_trig) begin
-            intr_flag <= 1'b1;
+        end else begin
+            intr_ff0 <= interrupt;
+            intr_ff1 <= intr_ff0;
+            intr_ff2 <= intr_ff1;
+            intr_flag <= trig_hit & trig_en ? 1'b1 : prog_step ? 1'b0 : intr_flag;
         end
     end
 
@@ -298,21 +320,22 @@ module merc32_core(
             lb_addr <= 0;
             lb_wdata <= 0;
         end else begin
-            lb_wren <= funct == FUNC_MWR && prog_exec;
-            lb_rden <= funct == FUNC_MRD && prog_exec;
-            lb_wdata <= funct == FUNC_MWR && prog_exec ? regi_int[reg_dest] : lb_wdata;
+            lb_wren <= 
+                ({opc, fun} == {OP_IMM, FUNC_MWR}
+                || {opc, fun} == {OP_REG, FUNC_MWR})
+                && prog_exec;
+            lb_rden <= 
+                ({opc, fun} == {OP_IMM, FUNC_MRD}
+                || {opc, fun} == {OP_REG, FUNC_MRD})
+                && prog_exec;
+            lb_wdata <= 
+                ({opc, fun} == {OP_IMM, FUNC_MWR}
+                || {opc, fun} == {OP_REG, FUNC_MWR})
+                && prog_exec ? regi_int[rd] : lb_wdata;
             lb_addr <= 
-                opcode == OP_IMMEDIATE ? regi_int[reg_src_2] + immediate : 
-                opcode == OP_REGISTER ?  regi_int[reg_src_2] + regi_int[reg_src_1] : lb_addr;
+                opc == OP_IMM ? regi_int[rs2] + imm : 
+                opc == OP_REG  ? regi_int[rs2] + regi_int[rs1] : lb_addr;
         end
     end
-
-intc                        u_intc (
-    .clk                    (clk            ),
-    .rst_n                  (rst_n          ),
-    .interrupt              (interrupt      ),
-    .trig_en                (trig_en        ),
-    .trig_mode              (trig_mode      ),
-    .intr_trig              (intr_trig      ));
 
 endmodule
