@@ -68,6 +68,8 @@ module apb_uart #(
     output  wire                        s_apb_pslverr,
     output  wire [31:0]                 s_apb_prdata,
 
+    output  reg                         interrupt,
+
     input   wire                        uart_rx,
     output  wire                        uart_tx
 );
@@ -76,11 +78,11 @@ module apb_uart #(
     reg                                 apb_pslverr;
     reg     [31:0]                      apb_prdata;
 
-    wire    [29:0]                      opt_addr;
+    wire    [11:0]                      opt_addr;
     wire                                slv_reg_rden;
     wire                                slv_reg_wren;
 
-    assign opt_addr     = s_apb_paddr[31:2];
+    assign opt_addr     = s_apb_paddr[11:2];
     assign slv_reg_wren = s_apb_psel & s_apb_penable & s_apb_pwrite & s_apb_pready;
     assign slv_reg_rden = s_apb_psel & ~s_apb_penable & ~s_apb_pwrite;
 
@@ -112,6 +114,7 @@ module apb_uart #(
     reg     [31:0]          uart_rx_status;
     reg     [31:0]          uart_tx_buf;
     reg     [31:0]          uart_tx_status;
+    reg     [31:0]          uart_interrupt;
 
     wire                    soft_rst;
     reg                     rx_en;
@@ -120,14 +123,14 @@ module apb_uart #(
     wire                    rx_valid;
     wire                    rx_ready;
     wire    [7:0]           rx_data;
-    wire    [3:0]           rx_data_cnt;
+    wire    [$clog2(FIFO_DEPTH):0] rx_data_cnt;
     reg                     tx_en;
     reg     [1:0]           tx_cnt;
     wire    [1:0]           tx_ptr;
     wire                    tx_valid;
     wire                    tx_ready;
     wire    [7:0]           tx_data;
-    wire    [3:0]           tx_data_cnt;
+    wire    [$clog2(FIFO_DEPTH):0] tx_data_cnt;
 
     assign  soft_rst = uart_ctrl[31];
     assign  rx_ptr = uart_rx_status[1:0];
@@ -156,9 +159,26 @@ end
 
 always @(posedge s_apb_pclk) begin
     if(!s_apb_presetn) begin
+        interrupt <= 0;
+    end else if(uart_interrupt[0]) begin
+        case (uart_interrupt[2:1])
+            0:interrupt <= rx_valid;
+            1:interrupt <= tx_ready;
+            2:interrupt <= rx_data_cnt == uart_interrupt[23:16];
+            3:interrupt <= tx_data_cnt == uart_interrupt[31:24];
+        endcase
+    end else begin
+        interrupt <= 0;
+    end
+end
+
+always @(posedge s_apb_pclk) begin
+    if(!s_apb_presetn) begin
         uart_ctrl <= 0;
+        uart_config <= 0;
         uart_tx_buf <= 0;
         uart_tx_status <= 0;
+        uart_interrupt <= 0;
     end else if(slv_reg_wren) begin
         case(opt_addr)
             0:uart_ctrl <= s_apb_pwdata;
@@ -167,13 +187,20 @@ always @(posedge s_apb_pclk) begin
                 uart_tx_buf <= s_apb_pwdata;
                 uart_tx_status <= uart_tx_status & 32'hfffffffc;
             end
+            6:uart_interrupt <= s_apb_pwdata & 32'hfffffff7;
+        endcase
+    end else if(slv_reg_rden) begin
+        case(opt_addr)
+            6:uart_interrupt <= uart_interrupt & 32'hfffffff7;
         endcase
     end else begin
-        uart_ctrl <= uart_ctrl & 32'h7fffffee;
-        uart_tx_status[8] <= tx_valid;
+        uart_ctrl <= uart_ctrl & 32'hffffffee;
+        uart_tx_status[9] <= tx_valid;
+        uart_tx_status[8] <= tx_ready;
         uart_tx_status[7:6] <= tx_cnt;
         uart_tx_status[5:2] <= tx_data_cnt;
         uart_tx_status[1:0] <= tx_valid & tx_ready ? uart_tx_status[1:0] + 1 : uart_tx_status[1:0];
+        uart_interrupt[4] <= interrupt ? 1 : uart_interrupt[4];
     end
 end
 
@@ -191,9 +218,11 @@ always @(posedge s_apb_pclk) begin
             end
             3:apb_prdata <= uart_rx_status;
             5:apb_prdata <= uart_tx_status;
+            6:apb_prdata <= uart_interrupt;
         endcase
     end else begin
-        uart_rx_status[8] <= rx_ready;
+        uart_rx_status[9] <= rx_ready;
+        uart_rx_status[8] <= rx_valid;
         uart_rx_status[7:6] <= rx_cnt;
         uart_rx_status[5:2] <= rx_data_cnt;
         uart_rx_status[1:0] <= rx_valid & rx_ready ? uart_rx_status[1:0] + 1 : uart_rx_status[1:0];
@@ -210,32 +239,29 @@ always @(posedge s_apb_pclk) begin
             2'd2:uart_rx_buf[15:08] <= rx_data;
             2'd3:uart_rx_buf[07:00] <= rx_data;
         endcase
-    end else if(slv_reg_rden && opt_addr == 1) begin
+    end else if(slv_reg_rden && opt_addr == 2) begin
         uart_rx_buf <= 32'h0;
     end
 end
 
-    uart_top #(
-        .SYS_CLK_FREQ               (SYS_CLK_FREQ       ),
-        .FIFO_DEPTH                 (FIFO_DEPTH         ))
-    u_uart_top (
-        .clk                        (s_apb_pclk         ),
-        .rst_n                      (s_apb_presetn & ~soft_rst),
-
-        .baud_rate                  (uart_config[23:0]  ),
-        .stop_bit                   (uart_config[31]    ),
-        .parity_type                (uart_config[30:29] ),
-
-        .s_axis_tx_tvalid           (tx_valid           ),
-        .s_axis_tx_tready           (tx_ready           ),
-        .s_axis_tx_tdata            (tx_data            ),
-        .tx_data_cnt                (tx_data_cnt        ),
-        .m_axis_rx_tvalid           (rx_valid           ),
-        .m_axis_rx_tready           (rx_ready           ),
-        .m_axis_rx_tdata            (rx_data            ),
-        .rx_data_cnt                (rx_data_cnt        ),
-
-        .uart_rx                    (uart_rx            ),
-        .uart_tx                    (uart_tx            ));
+uart_top #(
+    .SYS_CLK_FREQ               (SYS_CLK_FREQ       ),
+    .FIFO_DEPTH                 (FIFO_DEPTH         ))
+u_uart_top (
+    .clk                        (s_apb_pclk         ),
+    .rst_n                      (s_apb_presetn & ~soft_rst),
+    .baud_rate                  (uart_config[23:0]  ),
+    .stop_bit                   (uart_config[31]    ),
+    .parity_type                (uart_config[30:29] ),
+    .s_axis_tx_tvalid           (tx_valid           ),
+    .s_axis_tx_tready           (tx_ready           ),
+    .s_axis_tx_tdata            (tx_data            ),
+    .tx_data_cnt                (tx_data_cnt        ),
+    .m_axis_rx_tvalid           (rx_valid           ),
+    .m_axis_rx_tready           (rx_ready           ),
+    .m_axis_rx_tdata            (rx_data            ),
+    .rx_data_cnt                (rx_data_cnt        ),
+    .uart_rx                    (uart_rx            ),
+    .uart_tx                    (uart_tx            ));
 
 endmodule

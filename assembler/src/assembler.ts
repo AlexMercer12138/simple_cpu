@@ -381,10 +381,40 @@ export class SimpleCPUAssembler {
     }
 
     parseJmp(operands: string[], lineNum: number, lineContent: string): Instruction {
-        if (operands.length !== 2) {
-            throw new Error("jmp 指令需要 2 个操作数: jmp target, rd");
+        if (operands.length < 1 || operands.length > 2) {
+            throw new Error("jmp 指令格式错误，应为: jmp target[, rd]");
         }
-        return { instType: InstructionType.JAL, operands: [operands[0], operands[1]], lineNum, lineContent };
+
+        const rd = operands[1]?.trim() || 'r0';
+        const targetTokens = this.tokenizeOperands(operands[0]);
+        let base: string;
+        let offset: string;
+
+        if (targetTokens.length === 1) {
+            base = 'r0';
+            offset = targetTokens[0];
+        } else if (targetTokens.length === 3 && ['+', '-'].includes(targetTokens[1])) {
+            base = targetTokens[0];
+            offset = targetTokens[2];
+            if (targetTokens[1] === '-') {
+                if (!this.isImmediate(offset)) {
+                    throw new Error("jmp 只支持寄存器减立即数: jmp rx - imm[, rd]");
+                }
+                offset = this.negateImmediateToken(offset);
+            }
+        } else {
+            throw new Error("jmp 目标格式错误，应为 imm、rx、rx + imm、rx - imm 或 rx1 + rx2");
+        }
+
+        return { instType: InstructionType.JAL, operands: [rd, base, offset], lineNum, lineContent };
+    }
+
+    negateImmediateToken(token: string): string {
+        const parsed = parseNumericLiteral(token);
+        if (!parsed) {
+            throw new Error(`无效的立即数: ${token}`);
+        }
+        return String(-parsed.value);
     }
 
     parseBrc(operands: string[], lineNum: number, lineContent: string): Instruction {
@@ -499,11 +529,21 @@ export class SimpleCPUAssembler {
                 const addr = this.symbols.get(op)!;
                 newOperands.push(`${addr}`);
             } else {
-                newOperands.push(op);
+                newOperands.push(this.replaceSymbolsInOperand(op));
             }
         }
 
         return (labelPart + " " + mnemonic + " " + newOperands.join(", ")).trim();
+    }
+
+    replaceSymbolsInOperand(operand: string): string {
+        return operand.replace(/\b[A-Za-z_][A-Za-z0-9_]*\b/g, (identifier) => {
+            if (this.isValidRegister(identifier)) {
+                return identifier;
+            }
+            const addr = this.symbols.get(identifier);
+            return addr === undefined ? identifier : `${addr}`;
+        });
     }
 
     encodeInstruction(inst: Instruction, currentAddr: number): number {
@@ -565,16 +605,17 @@ export class SimpleCPUAssembler {
         }
 
         if (type === InstructionType.JAL) {
-            const target = ops[0];
-            const rd = this.parseRegister(ops[1]);
-            if (this.isImmediate(target)) {
-                const imm = this.parseImmediate(target, 16);
-                return (imm << 16) | (rd << 8) | (OPCODE_I << 4) | type;
-            } else if (this.isValidRegister(target)) {
-                const rs1 = this.parseRegister(target);
-                return (rs1 << 16) | (rd << 8) | (OPCODE_R << 4) | type;
+            const rd = this.parseRegister(ops[0]);
+            const rs2 = this.parseRegister(ops[1]);
+            const offset = ops[2];
+            if (this.isImmediate(offset)) {
+                const imm = this.parseImmediate(offset, 16);
+                return (imm << 16) | (rs2 << 12) | (rd << 8) | (OPCODE_I << 4) | type;
+            } else if (this.isValidRegister(offset)) {
+                const rs1 = this.parseRegister(offset);
+                return (rs1 << 16) | (rs2 << 12) | (rd << 8) | (OPCODE_R << 4) | type;
             } else {
-                throw new Error(`无效的跳转目标: ${target} (应为立即数或寄存器)`);
+                throw new Error(`无效的跳转偏移: ${offset} (应为立即数或寄存器)`);
             }
         }
 

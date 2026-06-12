@@ -1,12 +1,12 @@
 `timescale 1ns / 1ps
 //================================================================================
 //
-//  ███╗   ███╗███████╗██████�? ██████╗███████╗██████╗ 
-//  ████�?████║██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██�?
-//  ██╔████╔██║█████�? ██████╔╝██�?    █████╗  ██████╔╝
-//  ██║╚██╔╝██║██╔══�? ██╔══██╗██�?    ██╔══╝  ██╔══██╗
-//  ██�?╚═�?██║███████╗██║  ██║╚██████╗███████╗██║  ██�?
-//  ╚═�?    ╚═╝╚══════╝╚═╝  ╚═�?╚═════╝╚══════╝╚═╝  ╚═�?
+//  ███╗   ███╗███████╗██████╗  ██████╗███████╗██████╗ 
+//  ████╗ ████║██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗
+//  ██╔████╔██║█████╗  ██████╔╝██║     █████╗  ██████╔╝
+//  ██║╚██╔╝██║██╔══╝  ██╔══██╗██║     ██╔══╝  ██╔══██╗
+//  ██║ ╚═╝ ██║███████╗██║  ██║╚██████╗███████╗██║  ██║
+//  ╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝  ╚═╝
 //
 //--------------------------------------------------------------------------------
 //  Author      : Mercer
@@ -154,12 +154,12 @@ module merc32_core(
         end else begin
             prog_addr <= prog_step ? (intr_flag ? intr_addr : prog_next) : prog_addr;
             case({opc, fun})
-                {OP_IMM, FUNC_JAL}:prog_next <= prog_exec ? imm : prog_next;
+                {OP_IMM, FUNC_JAL}:prog_next <= prog_exec ? (regi_int[rs2] + imm) : prog_next;
                 {OP_IMM, FUNC_BEQ}:prog_next <= prog_exec ? (regi_int[rs2] == regi_int[rd] ? imm : prog_addr + 1) : prog_next;
                 {OP_IMM, FUNC_BNE}:prog_next <= prog_exec ? (regi_int[rs2] != regi_int[rd] ? imm : prog_addr + 1) : prog_next;
                 {OP_IMM, FUNC_BLT}:prog_next <= prog_exec ? ($signed(regi_int[rs2]) < $signed(regi_int[rd]) ? imm : prog_addr + 1) : prog_next;
                 {OP_IMM, FUNC_BGE}:prog_next <= prog_exec ? ($signed(regi_int[rs2]) >= $signed(regi_int[rd]) ? imm : prog_addr + 1) : prog_next;
-                {OP_REG, FUNC_JAL}:prog_next <= prog_exec ? regi_int[rs1] : prog_next;
+                {OP_REG, FUNC_JAL}:prog_next <= prog_exec ? (regi_int[rs2] + regi_int[rs1]) : prog_next;
                 {OP_REG, FUNC_BEQ}:prog_next <= prog_exec ? (regi_int[rs2] == regi_int[rd] ? regi_int[rs1] : prog_addr + 1) : prog_next;
                 {OP_REG, FUNC_BNE}:prog_next <= prog_exec ? (regi_int[rs2] != regi_int[rd] ? regi_int[rs1] : prog_addr + 1) : prog_next;
                 {OP_REG, FUNC_BLT}:prog_next <= prog_exec ? ($signed(regi_int[rs2]) < $signed(regi_int[rd]) ? regi_int[rs1] : prog_addr + 1) : prog_next;
@@ -292,10 +292,11 @@ module merc32_core(
                 4'hc:regi_int[12] <= alu_data;
                 4'hd:regi_int[13] <= alu_data;
                 4'he:regi_int[14] <= alu_data;
-                4'hf:regi_int[15] <= alu_data;
+                4'hf:regi_int[15] <= regi_int[15];
             endcase
         end else begin
             regi_int[00] <= 32'h0;
+            regi_int[15] <= prog_addr;
         end
     end
 

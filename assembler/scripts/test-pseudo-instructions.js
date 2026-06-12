@@ -91,6 +91,28 @@ pair(4)
 `);
 assert.deepStrictEqual(hex(result.machineCodes), ['0x00040610', '0x00040610']);
 
+result = assemble(`
+target:
+jmp 12, r5
+jmp r4, r6
+jmp r2 + 7, r8
+jmp r2 - 3, r9
+jmp r1 + r3, r10
+jmp 15
+jmp r7
+jmp r14 + 2
+`);
+assert.deepStrictEqual(hex(result.machineCodes), [
+    '0x000c051b',
+    '0x0004062b',
+    '0x0007281b',
+    '0xfffd291b',
+    '0x00031a2b',
+    '0x000f001b',
+    '0x0007002b',
+    '0x0002e01b',
+]);
+
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'merc32-pre-'));
 const main = path.join(tmp, 'source.asm');
 fs.writeFileSync(main, '.prog demo_prog\nmov r1, 1\n', 'utf8');

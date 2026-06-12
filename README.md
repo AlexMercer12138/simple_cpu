@@ -8,7 +8,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Architecture-32bit%20RISC-green.svg" alt="Architecture">
   <img src="https://img.shields.io/badge/Registers-16-green.svg" alt="Registers">
-  <img src="https://img.shields.io/badge/Instructions-30-green.svg" alt="Instructions">
+  <img src="https://img.shields.io/badge/Instructions-32-green.svg" alt="Instructions">
   <img src="https://img.shields.io/badge/Bus-AXI4--Lite-orange.svg" alt="Bus">
 </p>
 
@@ -82,12 +82,12 @@ MERC32/
 
 | 字段 | 位宽 | 描述 |
 |------|------|------|
-| `immediate` | 16位 [31:16] | 立即数/地址偏移 |
-| `reg_src_1` | 4位 [19:16] | 源寄存器1索引 |
-| `reg_src_2` | 4位 [15:12] | 源寄存器2索引 |
-| `reg_dest` | 4位 [11:8] | 目标寄存器索引 |
-| `opcode` | 4位 [7:4] | 操作类型码 |
-| `funct` | 4位 [3:0] | 功能码 |
+| `imm` | 16位 [31:16] | 立即数 |
+| `rs1` | 4位 [19:16] | 源寄存器1索引 |
+| `rs2` | 4位 [15:12] | 源寄存器2索引 |
+| `rd`  | 4位 [11:8] | 目标寄存器索引 |
+| `opc` | 4位 [7:4] | 操作类型码 |
+| `fun` | 4位 [3:0] | 功能码 |
 
 ### 操作类型码 (Opcode)
 
@@ -196,7 +196,8 @@ code --install-extension merc32-asm-2.0.0.vsix
 | `r0` | 零寄存器 | 固定为0，**不可写入** |
 | `r1` | 中断控制寄存器 | r1[0]=中断使能，r1[2:1]=中断触发类型 |
 | `r2` | 中断向量寄存器 | r2[31:16]=中断跳转地址，r2[15:0]=中断返回地址 |
-| `r3-r15` | 通用寄存器 | 可自由使用 |
+| `r3-r14` | 通用寄存器 | 可自由使用 |
+| `r15` | PC寄存器 | 读出当前指令地址，**不可写入** |
 
 ---
 

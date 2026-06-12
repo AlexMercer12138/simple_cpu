@@ -4,10 +4,13 @@
 *.ip_user_files/
 *.runs/
 *.sim/
+*.srcs/
+*.xdc
 *.xpr
 *.xsa
 *.bit
 *.hwh
+*.wcfg
 
 # ModelSim/QuestaSim
 work/

@@ -26,7 +26,11 @@
 //  Version History:
 //  v1.0 - Initial release
 //================================================================================
-`define IF_AXI_LITE
+// `define IF_AXI_LITE
+`define IF_APB
+// `define IF_WBC
+// `define IF_AVALON
+// `define IF_DRP
 
 module MERC32_top (
     input                               clk,

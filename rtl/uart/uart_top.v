@@ -27,9 +27,6 @@
 /*
 uart_top #(
     .SYS_CLK_FREQ               (50_000_000         ),
-    .BAUD_RATE                  (115200             ),
-    .STOP_BIT_CNT               (1                  ),
-    .PARITY_TYPE                ("none"             ),
     .FIFO_DEPTH                 (8                  ))
 u_uart_top (
     .clk                        (clk                ),
@@ -82,7 +79,7 @@ module uart_top #(
 
     reg                         rx_valid;
     wire                        rx_ready;
-    reg    [7:0]                rx_data;
+    reg     [7:0]               rx_data;
     wire                        tx_valid;
     reg                         tx_ready;
     wire    [7:0]               tx_data;

@@ -23,9 +23,19 @@
   "jmp": {
     "prefix": "jmp",
     "body": [
-      "jmp ${1:target}, ${2:r15}"
+      "jmp ${1:target}"
     ],
     "description": "jump to target"
+  },
+  "jmp link": {
+    "prefix": [
+      "jmplink",
+      "jal"
+    ],
+    "body": [
+      "jmp ${1:target}, ${2:r14}"
+    ],
+    "description": "jump to target and save PC+1"
   },
   "brc": {
     "prefix": "brc",

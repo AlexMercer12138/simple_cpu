@@ -121,10 +121,20 @@ mov [rs], rd              // Mem[rs] = rd
 #### jmp 指令
 
 ```asm
-jmp imm, rd               // rd = PC+1, PC = imm
-jmp label, rd             // rd = PC+1, PC = label
-jmp rs, rd                // rd = PC+1, PC = rs
+jmp imm, rd               // rd = PC+1, PC = r0 + imm
+jmp label, rd             // rd = PC+1, PC = r0 + label
+jmp rs, rd                // rd = PC+1, PC = r0 + rs
+jmp rs + imm, rd          // rd = PC+1, PC = rs + imm
+jmp rs - imm, rd          // rd = PC+1, PC = rs + (-imm)
+jmp rs1 + rs2, rd         // rd = PC+1, PC = rs1 + rs2
+
+jmp imm                   // PC = r0 + imm，不保存链接
+jmp rs                    // PC = r0 + rs，不保存链接
+jmp rs + imm              // PC = rs + imm，不保存链接
+jmp rs1 + rs2             // PC = rs1 + rs2，不保存链接
 ```
+
+`r15` 是只读 PC 寄存器，可用于相对跳转，例如 `jmp r15 - 2`。
 
 #### brc 指令（分支）
 
@@ -261,6 +271,8 @@ END;
 | 数据通路 | 单周期执行 |
 | 程序存储 | 65536条指令（16位地址） |
 | 有符号数支持 | 原生支持 |
+
+`r0` 固定为0，`r15` 固定为当前 PC，二者写入无效。
 
 ## 许可证
 

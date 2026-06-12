@@ -1,5 +1,60 @@
 # Simple CPU 指令集参考
 
+## 目录
+
+- [指令集概述](#指令集概述)
+  - [字段说明](#字段说明)
+- [指令列表](#指令列表)
+  - [1. 伪指令](#1-伪指令)
+    - [.equ - 常量宏定义](#equ---常量宏定义)
+    - [.prog - 输出文件名定义](#prog---输出文件名定义)
+    - [.ifdef/.elsif/.else/.endif - 条件编译](#ifdefelsifelseendif---条件编译)
+    - [.macro/.endm - 代码片段宏定义](#macroendm---代码片段宏定义)
+    - [.include - 文件引用](#include---文件引用)
+    - [.rept/.endr - 重复展开](#reptendr---重复展开)
+  - [2. 数据传送指令](#2-数据传送指令)
+    - [SETI - 设置立即数 (I-Type)](#seti---设置立即数-i-type)
+    - [SETR - 寄存器移动 (R-Type)](#setr---寄存器移动-r-type)
+  - [3. 算术运算指令](#3-算术运算指令)
+    - [ADDI - 立即数加法 (I-Type)](#addi---立即数加法-i-type)
+    - [ADDR - 寄存器加法 (R-Type)](#addr---寄存器加法-r-type)
+    - [SUBI - 立即数减法 (I-Type)](#subi---立即数减法-i-type)
+    - [SUBR - 寄存器减法 (R-Type)](#subr---寄存器减法-r-type)
+  - [4. 逻辑运算指令](#4-逻辑运算指令)
+    - [ANDI - 立即数按位与 (I-Type)](#andi---立即数按位与-i-type)
+    - [ANDR - 寄存器按位与 (R-Type)](#andr---寄存器按位与-r-type)
+    - [ORI - 立即数按位或 (I-Type)](#ori---立即数按位或-i-type)
+    - [ORR - 寄存器按位或 (R-Type)](#orr---寄存器按位或-r-type)
+    - [XORI - 立即数按位异或 (I-Type)](#xori---立即数按位异或-i-type)
+    - [XORR - 寄存器按位异或 (R-Type)](#xorr---寄存器按位异或-r-type)
+  - [5. 移位运算指令](#5-移位运算指令)
+    - [SLLI - 立即数逻辑左移 (I-Type)](#slli---立即数逻辑左移-i-type)
+    - [SLLR - 寄存器逻辑左移 (R-Type)](#sllr---寄存器逻辑左移-r-type)
+    - [SRLI - 立即数逻辑右移 (I-Type)](#srli---立即数逻辑右移-i-type)
+    - [SRLR - 寄存器逻辑右移 (R-Type)](#srlr---寄存器逻辑右移-r-type)
+    - [SRAI - 立即数算术右移 (I-Type)](#srai---立即数算术右移-i-type)
+    - [SRAR - 寄存器算术右移 (R-Type)](#srar---寄存器算术右移-r-type)
+  - [6. 内存访问指令](#6-内存访问指令)
+    - [MWRI - 立即数偏移内存写 (I-Type)](#mwri---立即数偏移内存写-i-type)
+    - [MWRR - 寄存器偏移内存写 (R-Type)](#mwrr---寄存器偏移内存写-r-type)
+    - [MRDI - 立即数偏移内存读 (I-Type)](#mrdi---立即数偏移内存读-i-type)
+    - [MRDR - 寄存器偏移内存读 (R-Type)](#mrdr---寄存器偏移内存读-r-type)
+  - [7. 跳转指令](#7-跳转指令)
+    - [JALI - 基址加立即数跳转并链接 (I-Type)](#jali---基址加立即数跳转并链接-i-type)
+    - [JALR - 基址加寄存器跳转并链接 (R-Type)](#jalr---基址加寄存器跳转并链接-r-type)
+  - [8. 分支指令](#8-分支指令)
+    - [BEQI - 立即数相等分支 (I-Type)](#beqi---立即数相等分支-i-type)
+    - [BEQR - 寄存器相等分支 (R-Type)](#beqr---寄存器相等分支-r-type)
+    - [BNEI - 立即数不等分支 (I-Type)](#bnei---立即数不等分支-i-type)
+    - [BNER - 寄存器不等分支 (R-Type)](#bner---寄存器不等分支-r-type)
+    - [BLTI - 立即数小于分支 (I-Type)](#blti---立即数小于分支-i-type)
+    - [BLTR - 寄存器小于分支 (R-Type)](#bltr---寄存器小于分支-r-type)
+    - [BGEI - 立即数大于等于分支 (I-Type)](#bgei---立即数大于等于分支-i-type)
+    - [BGER - 寄存器大于等于分支 (R-Type)](#bger---寄存器大于等于分支-r-type)
+- [相关文档](#相关文档)
+
+---
+
 ## 指令集概述
 
 Simple CPU 采用精简指令集（RISC）架构，共支持 **32条指令**（16种功能 × 2种寻址方式），每条指令为 **32位** 定长格式。
@@ -20,93 +75,100 @@ Simple CPU 采用精简指令集（RISC）架构，共支持 **32条指令**（1
 
 | 字段 | 位宽 | 描述 |
 |------|------|------|
-| `immediate` | 16位 [31:16] | 立即数/地址偏移 |
-| `reg_src_1` | 4位 [19:16] | 源寄存器1索引 |
-| `reg_src_2` | 4位 [15:12] | 源寄存器2索引 |
-| `reg_dest` | 4位 [11:8] | 目标寄存器索引 |
-| `opcode` | 4位 [7:4] | 操作类型码 |
-| `funct` | 4位 [3:0] | 功能码 |
+| `imm` | 16位 [31:16] | 立即数 |
+| `rs1` | 4位 [19:16] | 源寄存器1索引 |
+| `rs2` | 4位 [15:12] | 源寄存器2索引 |
+| `rd`  | 4位 [11:8] | 目标寄存器索引 |
+| `opc` | 4位 [7:4] | 操作类型码 |
+| `fun` | 4位 [3:0] | 功能码 |
 
----
+### 寄存器约定
 
-## 指令分类
-
-| 类别 | 指令数 | 说明 |
-|------|--------|------|
-| 数据传送 | 2条 | 立即数加载、寄存器移动 |
-| 算术运算 | 4条 | 立即数/寄存器加法、减法 |
-| 逻辑运算 | 6条 | 立即数/寄存器与、或、异或 |
-| 移位运算 | 6条 | 立即数/寄存器逻辑左移、逻辑右移、算术右移 |
-| 内存访问 | 4条 | 立即数偏移/寄存器偏移的内存读写 |
-| 跳转指令 | 2条 | 立即数地址/寄存器地址的跳转并链接 |
-| 分支指令 | 8条 | 立即数地址/寄存器地址的各种条件分支 |
-
----
-
-## 操作类型码 (Opcode)
-
-| Opcode | 类型 | 说明 |
-|--------|------|------|
-| `0001` | I-Type | 立即数操作 - immediate字段作为操作数 |
-| `0010` | R-Type | 寄存器操作 - reg_src_1指向的寄存器作为操作数 |
-
----
-
-## 功能码 (Funct)
-
-| Funct | 助记符 | 描述 |
-|-------|--------|------|
-| `0000` | `SET` | 设置/移动 |
-| `0001` | `ADD` | 加法 |
-| `0010` | `SUB` | 减法 |
-| `0011` | `AND` | 按位与 |
-| `0100` | `OR`  | 按位或 |
-| `0101` | `XOR` | 按位异或 |
-| `0110` | `SLL` | 逻辑左移 |
-| `0111` | `SRL` | 逻辑右移 |
-| `1000` | `SRA` | 算术右移 |
-| `1001` | `MWR` | 内存写 |
-| `1010` | `MRD` | 内存读 |
-| `1011` | `JAL` | 跳转并链接 |
-| `1100` | `BEQ` | 相等分支 |
-| `1101` | `BNE` | 不等分支 |
-| `1110` | `BLT` | 小于分支（有符号比较） |
-| `1111` | `BGE` | 大于等于分支（有符号比较） |
+| 寄存器 | 说明 |
+|------|------|
+| `r0` | 零寄存器，读出恒为0，写入无效 |
+| `r15` | PC寄存器，读出当前指令地址，写入无效 |
 
 ---
 
 ## 指令列表
 
-### 伪指令
+### 1. 伪指令
 
 汇编器在预编译阶段支持以下伪指令：
 
-| 伪指令 | 说明 |
-|--------|------|
-| `.equ name [value]` | 定义常量宏或仅定义符号；表达式中只能使用常量宏和立即数 |
-| `.prog name` | 定义输出文件名；Verilog 输出时也作为 module 名 |
-| `.ifdef/.elsif/.else/.endif` | 按宏是否已定义进行条件编译 |
-| `.macro name(a, b, ...)/.endm` | 定义带参数代码段宏 |
-| `.include "file.asm"` | 将引用文件按声明顺序追加到主文件后一起汇编 |
-| `.rept count/.endr` | 重复展开代码块 |
+#### .equ - 常量宏定义
 
-```asm
-.prog demo
-.equ base 0x10
-.equ target base + 4
+说明：编译阶段文本替换
 
-.macro set(rd, value)
-    mov rd, value
-.endm
+**汇编示例：**
+```
+.equ uart_base 0x10000000       // uart_base -> 0x10000000
+.equ uart_cfg (uart_base + 4)   // uart_cfg -> 0x10000004
+.equ simulation                 // simulation defined
+```
 
-.ifdef target
-.rept 2
-    set(r1, target)
-.endr
+#### .prog - 输出文件名定义
+
+说明：定义输出文件名，Verilog 输出时也作为 module 名
+
+**汇编示例：**
+```
+.prog HelloWorld    // HelloWorld.v
+```
+
+#### .ifdef/.elsif/.else/.endif - 条件编译
+
+说明：按宏是否已定义进行条件编译
+
+**汇编示例：**
+```
+.ifdef UART
+    mov r3, 0x1000
+    mov r3, r3 << 16
+.elsif ETH
+    mov r3, 0x2000
+    mov r3, r3 << 16
+.else
+    mov r3, 0x3000
+    mov r3, r3 << 16
 .endif
 ```
 
-### 1. 数据传送指令
+#### .macro/.endm - 代码片段宏定义
+
+说明：定义带参数的代码片段，编译阶段文本替换
+
+**汇编示例：**
+```
+.macro SetInt32(rd, hi, lo)
+    mov rd, hi
+    mov rd, rd << 16
+    mov rd, rd + lo
+.endm
+```
+
+#### .include - 文件引用
+
+说明：将引用文件按声明顺序追加到主文件后一起汇编
+
+**汇编示例：**
+```
+.include "macro.asm"
+```
+
+#### .rept/.endr - 重复展开
+
+说明：将内部代码块重复声明多次
+
+**汇编示例：**
+```
+.rept 10
+    mov r8, r8 + 1
+.endr
+```
+
+### 2. 数据传送指令
 
 #### SETI - 设置立即数 (I-Type)
 
@@ -136,7 +198,7 @@ mov r5, r3         // r5 = r3
 
 ---
 
-### 2. 算术运算指令
+### 3. 算术运算指令
 
 #### ADDI - 立即数加法 (I-Type)
 
@@ -192,7 +254,7 @@ mov r3, r5 - r2     // r3 = r5 - r2
 
 ---
 
-### 3. 逻辑运算指令
+### 4. 逻辑运算指令
 
 #### ANDI - 立即数按位与 (I-Type)
 
@@ -268,7 +330,7 @@ mov r4, r7 ^ r3     // r4 = r7 ^ r3
 
 ---
 
-### 4. 移位运算指令
+### 5. 移位运算指令
 
 #### SLLI - 立即数逻辑左移 (I-Type)
 
@@ -350,7 +412,7 @@ mov r3, r4 >>> r1     // r3 = r4 >>> r1 (有符号右移)
 
 ---
 
-### 5. 内存访问指令
+### 6. 内存访问指令
 
 #### MWRI - 立即数偏移内存写 (I-Type)
 
@@ -406,37 +468,41 @@ mov r3, [r7 + r2]   // r3 = Mem[r7 + r2]
 
 ---
 
-### 6. 跳转指令
+### 7. 跳转指令
 
-#### JALI - 立即数跳转并链接 (I-Type)
+#### JALI - 基址加立即数跳转并链接 (I-Type)
 
 | 字段 | 值 |
 |------|-----|
 | 操作码 | `opcode=0001, funct=1011` |
-| 操作 | `R[dest] = PC + 1; PC = immediate` |
-| 说明 | 跳转到立即数指定的地址，并将返回地址存入目标寄存器 |
+| 操作 | `R[dest] = PC + 1; PC = R[src_2] + immediate` |
+| 说明 | 将基址寄存器 `src_2` 与16位立即数相加作为跳转地址，并将返回地址存入目标寄存器；若 `dest=r0` 则不保存链接 |
 
 **汇编示例：**
 ```
-jmp 100, r6    // r6 = PC + 1, PC = 100
+jmp 100, r6        // r6 = PC + 1, PC = r0 + 100
+jmp r15 + 2       // 不保存链接，PC = 当前PC + 2
+jmp r3 - 4, r6     // r6 = PC + 1, PC = r3 + (-4)
 ```
 
-#### JALR - 寄存器跳转并链接 (R-Type)
+#### JALR - 基址加寄存器跳转并链接 (R-Type)
 
 | 字段 | 值 |
 |------|-----|
 | 操作码 | `opcode=0010, funct=1011` |
-| 操作 | `R[dest] = PC + 1; PC = R[src_1]` |
-| 说明 | 跳转到 src_1 寄存器指定的地址，并将返回地址存入目标寄存器 |
+| 操作 | `R[dest] = PC + 1; PC = R[src_2] + R[src_1]` |
+| 说明 | 将两个源寄存器相加作为跳转地址，并将返回地址存入目标寄存器；若 `dest=r0` 则不保存链接 |
 
 **汇编示例：**
 ```
-jmp r10, r6     // r6 = PC + 1, PC = r10
+jmp r10, r6         // r6 = PC + 1, PC = r0 + r10
+jmp r1 + r2, r6     // r6 = PC + 1, PC = r1 + r2
+jmp r15 + r3        // 不保存链接，PC = 当前PC + r3
 ```
 
 ---
 
-### 7. 分支指令
+### 8. 分支指令
 
 **注意：BLT和BGE使用有符号数比较**
 
@@ -540,87 +606,6 @@ brc loop, r5 >= r3  // if ($signed(r5) >= $signed(r3)) PC = loop else PC = PC + 
 **汇编示例：**
 ```
 brc r10, r5 >= r3   // if ($signed(r5) >= $signed(r3)) PC = r10 else PC = PC + 1
-```
-
----
-
-## 指令编码速查表
-
-### I-Type 指令 (Opcode = 0001)
-
-| Funct | 助记符 | 功能描述 |
-|-------|--------|----------|
-| `0000` | SETI | `R[dest] = immediate` |
-| `0001` | ADDI | `R[dest] = R[src_2] + immediate` |
-| `0010` | SUBI | `R[dest] = R[src_2] - immediate` |
-| `0011` | ANDI | `R[dest] = R[src_2] & immediate` |
-| `0100` | ORI | `R[dest] = R[src_2] \| immediate` |
-| `0101` | XORI | `R[dest] = R[src_2] ^ immediate` |
-| `0110` | SLLI | `R[dest] = R[src_2] << immediate` |
-| `0111` | SRLI | `R[dest] = R[src_2] >> immediate` |
-| `1000` | SRAI | `R[dest] = R[src_2] >>> immediate` |
-| `1001` | MWRI | `Mem[R[src_2] + immediate] = R[dest]` |
-| `1010` | MRDI | `R[dest] = Mem[R[src_2] + immediate]` |
-| `1011` | JALI | `R[dest] = PC+1; PC = immediate` |
-| `1100` | BEQI | `PC = (R[src_2]==R[dest]) ? immediate : PC+1` |
-| `1101` | BNEI | `PC = (R[src_2]!=R[dest]) ? immediate : PC+1` |
-| `1110` | BLTI | `PC = ($signed(R[src_2])<$signed(R[dest])) ? immediate : PC+1` |
-| `1111` | BGEI | `PC = ($signed(R[src_2])>=$signed(R[dest])) ? immediate : PC+1` |
-
-### R-Type 指令 (Opcode = 0010)
-
-| Funct | 助记符 | 功能描述 |
-|-------|--------|----------|
-| `0000` | SETR | `R[dest] = R[src_1]` |
-| `0001` | ADDR | `R[dest] = R[src_2] + R[src_1]` |
-| `0010` | SUBR | `R[dest] = R[src_2] - R[src_1]` |
-| `0011` | ANDR | `R[dest] = R[src_2] & R[src_1]` |
-| `0100` | ORR | `R[dest] = R[src_2] \| R[src_1]` |
-| `0101` | XORR | `R[dest] = R[src_2] ^ R[src_1]` |
-| `0110` | SLLR | `R[dest] = R[src_2] << R[src_1]` |
-| `0111` | SRLR | `R[dest] = R[src_2] >> R[src_1]` |
-| `1000` | SRAR | `R[dest] = R[src_2] >>> R[src_1]` |
-| `1001` | MWRR | `Mem[R[src_2] + R[src_1]] = R[dest]` |
-| `1010` | MRDR | `R[dest] = Mem[R[src_2] + R[src_1]]` |
-| `1011` | JALR | `R[dest] = PC+1; PC = R[src_1]` |
-| `1100` | BEQR | `PC = (R[src_2]==R[dest]) ? R[src_1] : PC+1` |
-| `1101` | BNER | `PC = (R[src_2]!=R[dest]) ? R[src_1] : PC+1` |
-| `1110` | BLTR | `PC = ($signed(R[src_2])<$signed(R[dest])) ? R[src_1] : PC+1` |
-| `1111` | BGER | `PC = ($signed(R[src_2])>=$signed(R[dest])) ? R[src_1] : PC+1` |
-
----
-
-## 有符号数支持说明
-
-### 寄存器声明
-
-所有寄存器被声明为有符号数类型：
-```verilog
-reg signed [31:0] regi_int [0:15];
-```
-
-### 有符号比较
-
-BLT 和 BGE 指令使用 `$signed()` 系统函数进行有符号比较：
-
-```verilog
-// BLT 指令
-prog_next <= prog_exec ? ($signed(regi_int[reg_src_2]) < $signed(regi_int[reg_dest]) ? immediate : prog_addr + 1) : prog_next;
-
-// BGE 指令
-prog_next <= prog_exec ? ($signed(regi_int[reg_src_2]) >= $signed(regi_int[reg_dest]) ? immediate : prog_addr + 1) : prog_next;
-```
-
-### 算术右移 (SRA)
-
-SRA 指令使用 Verilog 的算术右移运算符 `>>>`，自动进行符号位扩展：
-
-```verilog
-// SRAI (I-Type)
-regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] >>> immediate : regi_int[reg_dest];
-
-// SRAR (R-Type)
-regi_int[reg_dest] <= prog_exec ? regi_int[reg_src_2] >>> regi_int[reg_src_1] : regi_int[reg_dest];
 ```
 
 ---
