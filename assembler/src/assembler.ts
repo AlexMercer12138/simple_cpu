@@ -11,7 +11,64 @@ interface NumericLiteral {
 
 const NUMERIC_LITERAL_PATTERN = /^([+-]?)(?:(?:0[xX]([0-9a-fA-F]+))|(?:0[bB]([01]+))|(\d+))$/;
 
+function parseQuotedByteString(token: string): number[] | undefined {
+    const text = token.trim();
+    if (!text.startsWith('"') || !text.endsWith('"') || text.length < 2) {
+        return undefined;
+    }
+
+    const bytes: number[] = [];
+    for (let i = 1; i < text.length - 1; i++) {
+        let code: number;
+        const char = text[i];
+        if (char === '\\') {
+            i++;
+            if (i >= text.length - 1) {
+                return undefined;
+            }
+            const escaped = text[i];
+            if (escaped === 'n') code = 0x0A;
+            else if (escaped === 'r') code = 0x0D;
+            else if (escaped === 't') code = 0x09;
+            else if (escaped === '0') code = 0x00;
+            else if (escaped === '\\') code = 0x5C;
+            else if (escaped === '"') code = 0x22;
+            else if (escaped === 'x') {
+                const hex = text.slice(i + 1, i + 3);
+                if (!/^[0-9a-fA-F]{2}$/.test(hex)) {
+                    return undefined;
+                }
+                code = Number.parseInt(hex, 16);
+                i += 2;
+            } else {
+                return undefined;
+            }
+        } else {
+            code = char.charCodeAt(0);
+        }
+
+        if (code < 0 || code > 0xFF) {
+            return undefined;
+        }
+        bytes.push(code);
+    }
+
+    return bytes;
+}
+
 function parseNumericLiteral(token: string): NumericLiteral | undefined {
+    const bytes = parseQuotedByteString(token);
+    if (bytes !== undefined) {
+        if (bytes.length < 1 || bytes.length > 2) {
+            return undefined;
+        }
+        return {
+            value: bytes.reduce((value, byte) => (value << 8) | byte, 0),
+            radix: 16,
+            prefixed: true,
+        };
+    }
+
     const match = token.trim().match(NUMERIC_LITERAL_PATTERN);
     if (!match) {
         return undefined;
@@ -61,11 +118,22 @@ export enum InstructionType {
     SRA = 0x8,
     MWR = 0x9,
     MRD = 0xA,
-    JAL = 0xB,
-    BEQ = 0xC,
-    BNE = 0xD,
-    BLT = 0xE,
-    BGE = 0xF,
+    CMP = 0xB,
+    BRC = 0xC,
+    JAL = 0xD,
+}
+
+enum CompareCondition {
+    EQ = 0x0,
+    NE = 0x1,
+    SGE = 0x2,
+    SLT = 0x3,
+    SGT = 0x4,
+    SLE = 0x5,
+    UGE = 0x6,
+    ULT = 0x7,
+    UGT = 0x8,
+    ULE = 0x9,
 }
 
 export interface Instruction {
@@ -84,6 +152,7 @@ export interface ParsedLine {
 export interface AssemblyResult extends AssemblyDebugInfo {
     machineCodes: number[];
     programName?: string;
+    entryLabel?: string;
     preprocessedCode: string;
 }
 
@@ -170,12 +239,81 @@ export class SimpleCPUAssembler {
         return parseNumericLiteral(token) !== undefined;
     }
 
+    splitOperands(operandStr: string): string[] {
+        const operands: string[] = [];
+        let current = "";
+        let inString = false;
+        let escape = false;
+
+        for (const char of operandStr) {
+            if (escape) {
+                current += char;
+                escape = false;
+                continue;
+            }
+            if (inString && char === '\\') {
+                current += char;
+                escape = true;
+                continue;
+            }
+            if (char === '"') {
+                current += char;
+                inString = !inString;
+                continue;
+            }
+            if (char === ',' && !inString) {
+                if (current.trim()) {
+                    operands.push(current.trim());
+                }
+                current = "";
+                continue;
+            }
+            current += char;
+        }
+
+        if (inString) {
+            throw new Error("字符串立即数缺少结束双引号");
+        }
+        if (current.trim()) {
+            operands.push(current.trim());
+        }
+        return operands;
+    }
+
     tokenizeOperands(operandStr: string): string[] {
         const tokens: string[] = [];
         let current = "";
         let i = 0;
         while (i < operandStr.length) {
             const c = operandStr[i];
+            if (c === '"') {
+                if (current.trim()) {
+                    tokens.push(current.trim());
+                    current = "";
+                }
+                let literal = '"';
+                i++;
+                let closed = false;
+                while (i < operandStr.length) {
+                    const next = operandStr[i];
+                    literal += next;
+                    i++;
+                    if (next === '\\' && i < operandStr.length) {
+                        literal += operandStr[i];
+                        i++;
+                        continue;
+                    }
+                    if (next === '"') {
+                        closed = true;
+                        break;
+                    }
+                }
+                if (!closed) {
+                    throw new Error("字符串立即数缺少结束双引号");
+                }
+                tokens.push(literal);
+                continue;
+            }
             if (/\s/.test(c)) {
                 if (current.trim()) {
                     tokens.push(current.trim());
@@ -305,6 +443,9 @@ export class SimpleCPUAssembler {
 
         const firstOp = operands[0].trim();
         if (firstOp.startsWith('[')) {
+            if (operands.length !== 2) {
+                throw new Error("mov 内存写格式错误，应为: mov [addr], rd");
+            }
             const addrStr = firstOp;
             const dataReg = operands[1]?.trim();
             if (!dataReg) {
@@ -326,8 +467,8 @@ export class SimpleCPUAssembler {
             }
         }
 
-        if (operands.length < 2) {
-            throw new Error("mov 指令需要至少 2 个操作数: mov rd, src");
+        if (operands.length !== 2) {
+            throw new Error("mov 指令格式错误，应为: mov rd, src");
         }
 
         const destReg = operands[0];
@@ -409,62 +550,117 @@ export class SimpleCPUAssembler {
         return { instType: InstructionType.JAL, operands: [rd, base, offset], lineNum, lineContent };
     }
 
+    parseCmp(operands: string[], lineNum: number, lineContent: string): Instruction {
+        if (operands.length !== 2) {
+            throw new Error("cmp 指令格式错误，应为: cmp ra, rb 或 cmp ra, imm");
+        }
+
+        const lhs = operands[0].trim();
+        const rhs = operands[1].trim();
+        if (!this.isValidRegister(lhs)) {
+            throw new Error(`cmp 左操作数必须是寄存器: ${lhs}`);
+        }
+        if (!this.isValidRegister(rhs) && !this.isImmediate(rhs)) {
+            throw new Error(`cmp 右操作数必须是寄存器或立即数: ${rhs}`);
+        }
+
+        return { instType: InstructionType.CMP, operands: [lhs, rhs], lineNum, lineContent };
+    }
+
+    parseBrc(operands: string[], lineNum: number, lineContent: string, unsigned: boolean): Instruction {
+        if (operands.length !== 2) {
+            throw new Error('brc 指令格式错误，应为: brc target, "cond" 或 brcu target, "cond"');
+        }
+
+        const condCode = this.parseConditionSuffix(operands[1], unsigned);
+        const [base, offset] = this.parseBranchTarget(operands[0], unsigned ? "brcu" : "brc");
+        return {
+            instType: InstructionType.BRC,
+            operands: [String(condCode), base, offset],
+            lineNum,
+            lineContent,
+        };
+    }
+
+    parseBranchTarget(target: string, instName: string): [string, string] {
+        const targetTokens = this.tokenizeOperands(target);
+
+        if (targetTokens.length === 1) {
+            return ['r0', targetTokens[0]];
+        }
+
+        if (targetTokens.length === 3 && ['+', '-'].includes(targetTokens[1])) {
+            const base = targetTokens[0];
+            let offset = targetTokens[2];
+            if (targetTokens[1] === '-') {
+                if (!this.isImmediate(offset)) {
+                    throw new Error(`${instName} 只支持寄存器减立即数: ${instName} rx - imm`);
+                }
+                offset = this.negateImmediateToken(offset);
+            }
+            return [base, offset];
+        }
+
+        throw new Error(`${instName} 目标格式错误，应为 imm、label、rx、rx + imm、rx - imm 或 rx1 + rx2`);
+    }
+
+    parseConditionSuffix(condition: string, unsigned: boolean): CompareCondition {
+        const quoted = condition.trim();
+        if (!/^".*"$/.test(quoted)) {
+            throw new Error(`brc 条件必须使用双引号: ${condition}`);
+        }
+        const cond = quoted.slice(1, -1).toLowerCase();
+        const commonMap: Record<string, CompareCondition> = {
+            'eq': CompareCondition.EQ,
+            '==': CompareCondition.EQ,
+            'ne': CompareCondition.NE,
+            '!=': CompareCondition.NE,
+        };
+        const signedMap: Record<string, CompareCondition> = {
+            ...commonMap,
+            'ge': CompareCondition.SGE,
+            '>=': CompareCondition.SGE,
+            'sge': CompareCondition.SGE,
+            'lt': CompareCondition.SLT,
+            '<': CompareCondition.SLT,
+            'slt': CompareCondition.SLT,
+            'gt': CompareCondition.SGT,
+            '>': CompareCondition.SGT,
+            'sgt': CompareCondition.SGT,
+            'le': CompareCondition.SLE,
+            '<=': CompareCondition.SLE,
+            'sle': CompareCondition.SLE,
+        };
+        const unsignedMap: Record<string, CompareCondition> = {
+            ...commonMap,
+            'ge': CompareCondition.UGE,
+            '>=': CompareCondition.UGE,
+            'uge': CompareCondition.UGE,
+            'lt': CompareCondition.ULT,
+            '<': CompareCondition.ULT,
+            'ult': CompareCondition.ULT,
+            'gt': CompareCondition.UGT,
+            '>': CompareCondition.UGT,
+            'ugt': CompareCondition.UGT,
+            'le': CompareCondition.ULE,
+            '<=': CompareCondition.ULE,
+            'ule': CompareCondition.ULE,
+        };
+
+        const condMap = unsigned ? unsignedMap : signedMap;
+        const code = condMap[cond];
+        if (code === undefined) {
+            throw new Error(`不支持的 brc 条件: ${condition}`);
+        }
+        return code;
+    }
+
     negateImmediateToken(token: string): string {
         const parsed = parseNumericLiteral(token);
         if (!parsed) {
             throw new Error(`无效的立即数: ${token}`);
         }
         return String(-parsed.value);
-    }
-
-    parseBrc(operands: string[], lineNum: number, lineContent: string): Instruction {
-        if (operands.length < 2) {
-            throw new Error("brc 指令格式错误，应为: brc target, rs2 op rs1");
-        }
-        const target = operands[0];
-        const conditionStr = operands.slice(1).join(' ');
-        const tokens = this.tokenizeOperands(conditionStr);
-
-        if (tokens.length < 3) {
-            throw new Error("brc 指令条件表达式格式错误");
-        }
-
-        let opIdx = -1;
-        for (let i = 0; i < tokens.length; i++) {
-            if (['==', '!=', '<', '>', '<=', '>='].includes(tokens[i])) {
-                opIdx = i;
-                break;
-            }
-        }
-
-        if (opIdx === -1 || opIdx === 0 || opIdx + 1 >= tokens.length) {
-            throw new Error("brc 指令缺少比较运算符或操作数");
-        }
-
-        let rs2 = tokens[opIdx - 1];
-        let op = tokens[opIdx];
-        let rd = tokens[opIdx + 1];
-
-        if (op === '>') {
-            op = '<';
-            [rs2, rd] = [rd, rs2];
-        } else if (op === '<=') {
-            op = '>=';
-            [rs2, rd] = [rd, rs2];
-        }
-
-        const opMap: Record<string, InstructionType> = {
-            '==': InstructionType.BEQ,
-            '!=': InstructionType.BNE,
-            '<': InstructionType.BLT,
-            '>=': InstructionType.BGE,
-        };
-
-        if (!(op in opMap)) {
-            throw new Error(`不支持的条件运算符: ${op}`);
-        }
-
-        return { instType: opMap[op], operands: [target, rs2, rd], lineNum, lineContent };
     }
 
     parseLine(line: string, lineNum: number): ParsedLine {
@@ -481,17 +677,21 @@ export class SimpleCPUAssembler {
         const parts = code.split(/\s+/);
         const mnemonic = parts[0];
         const operandStr = parts.slice(1).join(' ');
-        const operands = operandStr.split(',').map(s => s.trim()).filter(s => s);
+        const operands = this.splitOperands(operandStr);
 
         let inst: Instruction;
         if (mnemonic === 'mov') {
             inst = this.parseMov(operands, lineNum, line);
         } else if (mnemonic === 'jmp') {
             inst = this.parseJmp(operands, lineNum, line);
+        } else if (mnemonic === 'cmp') {
+            inst = this.parseCmp(operands, lineNum, line);
         } else if (mnemonic === 'brc') {
-            inst = this.parseBrc(operands, lineNum, line);
+            inst = this.parseBrc(operands, lineNum, line, false);
+        } else if (mnemonic === 'brcu') {
+            inst = this.parseBrc(operands, lineNum, line, true);
         } else {
-            throw new Error(`未知指令: ${mnemonic} (只支持 mov, jmp, brc)`);
+            throw new Error(`未知指令: ${mnemonic} (只支持 mov, cmp, jmp, brc, brcu)`);
         }
 
         return { label, instruction: inst, lineContent: line };
@@ -516,7 +716,7 @@ export class SimpleCPUAssembler {
 
         const mnemonic = parts[0];
         const operandsStr = parts.slice(1).join(' ');
-        const rawOperands = operandsStr.split(',').map(s => s.trim()).filter(s => s);
+        const rawOperands = this.splitOperands(operandsStr);
         const newOperands: string[] = [];
 
         for (const op of rawOperands) {
@@ -619,18 +819,33 @@ export class SimpleCPUAssembler {
             }
         }
 
-        if ([InstructionType.BEQ, InstructionType.BNE, InstructionType.BLT, InstructionType.BGE].includes(type)) {
-            const target = ops[0];
-            const rs2 = this.parseRegister(ops[1]);
-            const rd = this.parseRegister(ops[2]);
-            if (this.isImmediate(target)) {
-                const imm = this.parseImmediate(target, 16);
-                return (imm << 16) | (rs2 << 12) | (rd << 8) | (OPCODE_I << 4) | type;
-            } else if (this.isValidRegister(target)) {
-                const rs1 = this.parseRegister(target);
-                return (rs1 << 16) | (rs2 << 12) | (rd << 8) | (OPCODE_R << 4) | type;
+        if (type === InstructionType.CMP) {
+            const rs2 = this.parseRegister(ops[0]);
+            const rhs = ops[1];
+            if (this.isImmediate(rhs)) {
+                const imm = this.parseImmediate(rhs, 16);
+                return (imm << 16) | (rs2 << 12) | (OPCODE_I << 4) | type;
             } else {
-                throw new Error(`无效的分支目标: ${target} (应为立即数或寄存器)`);
+                const rs1 = this.parseRegister(rhs);
+                return (rs1 << 16) | (rs2 << 12) | (OPCODE_R << 4) | type;
+            }
+        }
+
+        if (type === InstructionType.BRC) {
+            const condition = Number.parseInt(ops[0], 10);
+            const rs2 = this.parseRegister(ops[1]);
+            const offset = ops[2];
+            if (!Number.isInteger(condition) || condition < 0 || condition > 15) {
+                throw new Error(`无效的分支条件码: ${ops[0]}`);
+            }
+            if (this.isImmediate(offset)) {
+                const imm = this.parseImmediate(offset, 16);
+                return (imm << 16) | (rs2 << 12) | (condition << 8) | (OPCODE_I << 4) | type;
+            } else if (this.isValidRegister(offset)) {
+                const rs1 = this.parseRegister(offset);
+                return (rs1 << 16) | (rs2 << 12) | (condition << 8) | (OPCODE_R << 4) | type;
+            } else {
+                throw new Error(`无效的分支偏移: ${offset} (应为立即数或寄存器)`);
             }
         }
 
@@ -641,6 +856,9 @@ export class SimpleCPUAssembler {
         const preprocessor = new AssemblerPreprocessor();
         const preprocessed = preprocessor.preprocess(sourceCode, options);
         const rawLines = preprocessed.sourceCode.split('\n');
+        if (preprocessed.entryLabel) {
+            rawLines.unshift(`jmp ${preprocessed.entryLabel} // .entry reset vector`);
+        }
         this.symbols = new Map();
         this.errors = [];
 
@@ -679,6 +897,8 @@ export class SimpleCPUAssembler {
             lines.push(line);
         }
 
+        const effectivePreprocessedCode = rawLines.join('\n');
+
         let instructionCount = 0;
         for (let lineNum = 1; lineNum <= lines.length; lineNum++) {
             const cleanLine = lines[lineNum - 1].trim();
@@ -698,6 +918,10 @@ export class SimpleCPUAssembler {
             if (code.trim()) {
                 instructionCount++;
             }
+        }
+
+        if (preprocessed.entryLabel && !this.symbols.has(preprocessed.entryLabel)) {
+            this.errors.push(`.entry target label not found: ${preprocessed.entryLabel}`);
         }
 
         if (this.errors.length) {
@@ -803,7 +1027,8 @@ export class SimpleCPUAssembler {
             debugSymbols,
             replacedCode,
             programName: preprocessed.programName,
-            preprocessedCode: preprocessed.sourceCode,
+            entryLabel: preprocessed.entryLabel,
+            preprocessedCode: effectivePreprocessedCode,
         };
     }
 

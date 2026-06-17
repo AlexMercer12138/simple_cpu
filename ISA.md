@@ -42,15 +42,11 @@
   - [7. 跳转指令](#7-跳转指令)
     - [JALI - 基址加立即数跳转并链接 (I-Type)](#jali---基址加立即数跳转并链接-i-type)
     - [JALR - 基址加寄存器跳转并链接 (R-Type)](#jalr---基址加寄存器跳转并链接-r-type)
-  - [8. 分支指令](#8-分支指令)
-    - [BEQI - 立即数相等分支 (I-Type)](#beqi---立即数相等分支-i-type)
-    - [BEQR - 寄存器相等分支 (R-Type)](#beqr---寄存器相等分支-r-type)
-    - [BNEI - 立即数不等分支 (I-Type)](#bnei---立即数不等分支-i-type)
-    - [BNER - 寄存器不等分支 (R-Type)](#bner---寄存器不等分支-r-type)
-    - [BLTI - 立即数小于分支 (I-Type)](#blti---立即数小于分支-i-type)
-    - [BLTR - 寄存器小于分支 (R-Type)](#bltr---寄存器小于分支-r-type)
-    - [BGEI - 立即数大于等于分支 (I-Type)](#bgei---立即数大于等于分支-i-type)
-    - [BGER - 寄存器大于等于分支 (R-Type)](#bger---寄存器大于等于分支-r-type)
+  - [8. 比较与分支指令](#8-比较与分支指令)
+    - [CMPI - 立即数比较 (I-Type)](#cmpi---立即数比较-i-type)
+    - [CMPR - 寄存器比较 (R-Type)](#cmpr---寄存器比较-r-type)
+    - [BRCI - 立即数目标条件分支 (I-Type)](#brci---立即数目标条件分支-i-type)
+    - [BRCR - 寄存器目标条件分支 (R-Type)](#brcr---寄存器目标条件分支-r-type)
 - [相关文档](#相关文档)
 
 ---
@@ -70,6 +66,8 @@ Simple CPU 采用精简指令集（RISC）架构，共支持 **32条指令**（1
 │       [15:0]        │ [3:0] │ [3:0] │ [3:0] │ [3:0] │
 └─────────────────────┴───────┴───────┴───────┴───────┘
 ```
+
+汇编语句规则：汇编器强制一行一条语句，不使用分号分隔。标签可以单独一行，也可以写成 `label: instruction`。
 
 ### 字段说明
 
@@ -474,7 +472,7 @@ mov r3, [r7 + r2]   // r3 = Mem[r7 + r2]
 
 | 字段 | 值 |
 |------|-----|
-| 操作码 | `opcode=0001, funct=1011` |
+| 操作码 | `opcode=0001, funct=1101` |
 | 操作 | `R[dest] = PC + 1; PC = R[src_2] + immediate` |
 | 说明 | 将基址寄存器 `src_2` 与16位立即数相加作为跳转地址，并将返回地址存入目标寄存器；若 `dest=r0` 则不保存链接 |
 
@@ -489,7 +487,7 @@ jmp r3 - 4, r6     // r6 = PC + 1, PC = r3 + (-4)
 
 | 字段 | 值 |
 |------|-----|
-| 操作码 | `opcode=0010, funct=1011` |
+| 操作码 | `opcode=0010, funct=1101` |
 | 操作 | `R[dest] = PC + 1; PC = R[src_2] + R[src_1]` |
 | 说明 | 将两个源寄存器相加作为跳转地址，并将返回地址存入目标寄存器；若 `dest=r0` 则不保存链接 |
 
@@ -502,110 +500,75 @@ jmp r15 + r3        // 不保存链接，PC = 当前PC + r3
 
 ---
 
-### 8. 分支指令
+### 8. 比较与分支指令
 
-**注意：BLT和BGE使用有符号数比较**
+`cmp` 指令比较两个操作数并更新内部比较标志；`brc target, "cond"` 使用有符号条件分支，`brcu target, "cond"` 使用无符号条件分支。目标格式与 `jmp` 相同，支持 `label/imm/rx/rx+imm/rx+ry`。
 
-#### BEQI - 立即数相等分支 (I-Type)
+| 条件字符串 | 条件码 | 含义 |
+|---------|--------|------|
+| `"=="`/`"eq"` | 0 | 相等 |
+| `"!="`/`"ne"` | 1 | 不相等 |
+| `">="`/`"ge"`/`"sge"` | 2 | 有符号大于等于 |
+| `"<"`/`"lt"`/`"slt"` | 3 | 有符号小于 |
+| `">"`/`"gt"`/`"sgt"` | 4 | 有符号大于 |
+| `"<="`/`"le"`/`"sle"` | 5 | 有符号小于等于 |
+| `brcu ..., ">="`/`"uge"` | 6 | 无符号大于等于 |
+| `brcu ..., "<"`/`"ult"` | 7 | 无符号小于 |
+| `brcu ..., ">"`/`"ugt"` | 8 | 无符号大于 |
+| `brcu ..., "<="`/`"ule"` | 9 | 无符号小于等于 |
+
+#### CMPI - 立即数比较 (I-Type)
+
+| 字段 | 值 |
+|------|-----|
+| 操作码 | `opcode=0001, funct=1011` |
+| 操作 | 更新 `R[src_2]` 与 `immediate` 的 `eq/sge/sgt/uge/ugt` 标志 |
+
+**汇编示例：**
+```
+cmp r5, 100
+```
+
+#### CMPR - 寄存器比较 (R-Type)
+
+| 字段 | 值 |
+|------|-----|
+| 操作码 | `opcode=0010, funct=1011` |
+| 操作 | 更新 `R[src_2]` 与 `R[src_1]` 的 `eq/sge/sgt/uge/ugt` 标志 |
+
+**汇编示例：**
+```
+cmp r5, r3
+```
+
+#### BRCI - 立即数目标条件分支 (I-Type)
 
 | 字段 | 值 |
 |------|-----|
 | 操作码 | `opcode=0001, funct=1100` |
-| 操作 | `PC = (R[src_2] == R[dest]) ? immediate : PC + 1` |
-| 说明 | 如果 src_2 和 dest 寄存器的值相等，则跳转到 immediate 地址 |
+| 条件码 | `dest[3:0]` |
+| 操作 | `PC = condition ? (R[src_2] + immediate) : PC + 1` |
 
 **汇编示例：**
 ```
-brc loop, r5 == r3     // if (r5 == r3) PC = loop else PC = PC + 1
+cmp r5, r3
+brc loop, "=="
+brcu r10 + 4, ">="
 ```
 
-#### BEQR - 寄存器相等分支 (R-Type)
+#### BRCR - 寄存器目标条件分支 (R-Type)
 
 | 字段 | 值 |
 |------|-----|
 | 操作码 | `opcode=0010, funct=1100` |
-| 操作 | `PC = (R[src_2] == R[dest]) ? R[src_1] : PC + 1` |
-| 说明 | 如果 src_2 和 dest 寄存器的值相等，则跳转到 src_1 寄存器指向的地址 |
+| 条件码 | `dest[3:0]` |
+| 操作 | `PC = condition ? (R[src_2] + R[src_1]) : PC + 1` |
 
 **汇编示例：**
 ```
-brc r10, r5 == r3   // if (r5 == r3) PC = r10 else PC = PC + 1
-```
-
-#### BNEI - 立即数不等分支 (I-Type)
-
-| 字段 | 值 |
-|------|-----|
-| 操作码 | `opcode=0001, funct=1101` |
-| 操作 | `PC = (R[src_2] != R[dest]) ? immediate : PC + 1` |
-
-**汇编示例：**
-```
-brc loop, r5 != r3  // if (r5 != r3) PC = loop else PC = PC + 1
-```
-
-#### BNER - 寄存器不等分支 (R-Type)
-
-| 字段 | 值 |
-|------|-----|
-| 操作码 | `opcode=0010, funct=1101` |
-| 操作 | `PC = (R[src_2] != R[dest]) ? R[src_1] : PC + 1` |
-
-**汇编示例：**
-```
-brc r10, r5 != r3   // if (r5 != r3) PC = r10 else PC = PC + 1
-```
-
-#### BLTI - 立即数小于分支 (I-Type)
-
-| 字段 | 值 |
-|------|-----|
-| 操作码 | `opcode=0001, funct=1110` |
-| 操作 | `PC = ($signed(R[src_2]) < $signed(R[dest])) ? immediate : PC + 1` |
-| 说明 | **有符号比较**：如果 src_2 < dest，则跳转到 immediate 地址 |
-
-**汇编示例：**
-```
-brc loop, r5 < r3   // if ($signed(r5) < $signed(r3)) PC = loop else PC = PC + 1
-```
-
-#### BLTR - 寄存器小于分支 (R-Type)
-
-| 字段 | 值 |
-|------|-----|
-| 操作码 | `opcode=0010, funct=1110` |
-| 操作 | `PC = ($signed(R[src_2]) < $signed(R[dest])) ? R[src_1] : PC + 1` |
-| 说明 | **有符号比较**：如果 src_2 < dest，则跳转到 src_1 寄存器指向的地址 |
-
-**汇编示例：**
-```
-brc r10, r5 < r3    // if ($signed(r5) < $signed(r3)) PC = r10 else PC = PC + 1
-```
-
-#### BGEI - 立即数大于等于分支 (I-Type)
-
-| 字段 | 值 |
-|------|-----|
-| 操作码 | `opcode=0001, funct=1111` |
-| 操作 | `PC = ($signed(R[src_2]) >= $signed(R[dest])) ? immediate : PC + 1` |
-| 说明 | **有符号比较**：如果 src_2 >= dest，则跳转到 immediate 地址 |
-
-**汇编示例：**
-```
-brc loop, r5 >= r3  // if ($signed(r5) >= $signed(r3)) PC = loop else PC = PC + 1
-```
-
-#### BGER - 寄存器大于等于分支 (R-Type)
-
-| 字段 | 值 |
-|------|-----|
-| 操作码 | `opcode=0010, funct=1111` |
-| 操作 | `PC = ($signed(R[src_2]) >= $signed(R[dest])) ? R[src_1] : PC + 1` |
-| 说明 | **有符号比较**：如果 src_2 >= dest，则跳转到 src_1 寄存器指向的地址 |
-
-**汇编示例：**
-```
-brc r10, r5 >= r3   // if ($signed(r5) >= $signed(r3)) PC = r10 else PC = PC + 1
+cmp r5, r3
+brc r10, "<"
+brcu r10 + r2, "<="
 ```
 
 ---

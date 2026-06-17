@@ -8,6 +8,7 @@ export interface PreprocessOptions {
 export interface PreprocessResult {
     sourceCode: string;
     programName?: string;
+    entryLabel?: string;
     definedSymbols: string[];
 }
 
@@ -50,11 +51,13 @@ export class AssemblerPreprocessor {
     private readonly equs = new Map<string, EquSymbol>();
     private readonly macros = new Map<string, MacroDefinition>();
     private programName: string | undefined;
+    private entryLabel: string | undefined;
 
     preprocess(sourceCode: string, options: PreprocessOptions = {}): PreprocessResult {
         this.equs.clear();
         this.macros.clear();
         this.programName = undefined;
+        this.entryLabel = undefined;
 
         const mainFile = options.sourceFileName ? path.resolve(options.sourceFileName) : undefined;
         const includeStack = new Set<string>();
@@ -68,6 +71,7 @@ export class AssemblerPreprocessor {
         return {
             sourceCode: expanded.map((line) => line.text).join('\n'),
             programName: this.programName,
+            entryLabel: this.entryLabel,
             definedSymbols: Array.from(this.equs.keys()),
         };
     }
@@ -142,6 +146,9 @@ export class AssemblerPreprocessor {
                         continue;
                     case 'prog':
                         this.handleProg(directive.rest, line);
+                        continue;
+                    case 'entry':
+                        this.handleEntry(directive.rest, line);
                         continue;
                     case 'ifdef':
                     case 'elsif':
@@ -261,6 +268,20 @@ export class AssemblerPreprocessor {
             throw this.error(line, '.prog name must be a valid identifier');
         }
         this.programName = name;
+    }
+
+    private handleEntry(rest: string, line: SourceLine): void {
+        const label = rest.trim();
+        if (!IDENTIFIER_PATTERN.test(label)) {
+            throw this.error(line, '.entry label must be a valid identifier');
+        }
+        if (REGISTER_FULL_PATTERN.test(label)) {
+            throw this.error(line, '.entry label cannot be a register name');
+        }
+        if (this.entryLabel !== undefined) {
+            throw this.error(line, `.entry already set to ${this.entryLabel}`);
+        }
+        this.entryLabel = label;
     }
 
     private defineMacro(rest: string, body: SourceLine[], line: SourceLine): void {

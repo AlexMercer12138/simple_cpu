@@ -191,55 +191,85 @@ APB ──►│  apb_uart               │──► interrupt
 
 ## 6. 编程指导
 
+> 以下示例与 [uart_test.asm](file:///d:/Software/simple_cpu/example/uart_test.asm) 完全对应。
+> 关键约定：`CNT_MAX = N` 时，一次操作的字节数为 **N+1**；启动一次收/发只需向 CTRL 写一次相应的 `EN` 位（硬件自动清零）。
+
 ### 6.1 初始化序列（推荐）
 
 ```
-1. 写 CTRL = 0x80000066，触发软复位并设置读写长度为 4
-2. 写 CONFIG = 0x0001C200，设置波特率为 115200
-3. 写 INTERRUPT = 0x00000001，设置中断使能
+1. 写 CONFIG    = 115200             // 直接填目标波特率(Hz)
+2. 写 INTERRUPT = 0x00000001         // INT_EN=1, INT_TYPE=00 (RX_VALID 触发)
+3. （可选）配置 CPU 中断向量, 选择上升沿触发
 ```
 
-### 6.2 发送 4 字节示例
+无需显式发起软复位；上电复位 (`presetn`) 已将所有寄存器清零。
+
+### 6.2 发送 1 字节示例
 
 ```
-等待:  while ((TX_STATUS >> 8) & 1) ;        // 等待 TX_VALID = 0
-写数据: TX_BUF  = {b0,b1,b2,b3};              // 同时清 TX_PTR
-启动:   CTRL    = 0x7B;                        // RX_EN|RX_MAX=3|TX_EN|TX_MAX=3
+等待 TX 通道空闲:
+    while ((TX_STATUS >> 9) & 1) ;       // 等待 TX_VALID == 0
+
+写入数据并启动:
+    TX_BUF = byte << 24;                 // 单字节放在 [31:24]
+    CTRL   = 0x0010;                     // TX_EN=1, TX_CNT_MAX=0 (1 字节)
 ```
 
-> 由于 `TX_EN` 硬件自动清零，**每发一帧都需要重写一次 CTRL**。
+对应汇编宏（[uart_test.asm](file:///d:/Software/simple_cpu/example/uart_test.asm) 中 `UartSendByte`）。
 
-### 6.3 接收 4 字节示例
-
-```
-轮询模式:
-    while (((RX_STATUS >> 6) & 0x3) != 3) ;   // 等 RX_CNT==3 (已收满 4 字节)
-    data = RX_BUF;                            // 读取并清 RX_PTR
-    CTRL = 0x7B;                              // 重新启动下一轮接收
-
-中断模式:
-    INTERRUPT = 0x01;        // INT_EN=1, INT_TYPE=00 (rx_valid)
-    // 配置 CPU 中断向量后, 在 ISR 中读 RX_BUF
-```
-
-### 6.4 中断回显示例（与 [uart_test.asm](file:///d:/Software/simple_cpu/example/uart_test.asm) 对应）
+### 6.3 发送 4 字节示例
 
 ```
-ISR:
+等待 TX 通道空闲:
+    while ((TX_STATUS >> 9) & 1) ;       // 等待 TX_VALID == 0
+
+写入数据并启动:
+    TX_BUF = {b0, b1, b2, b3};           // 写后硬件自动清 TX_PTR
+    CTRL   = 0x0070;                     // TX_EN=1, TX_CNT_MAX=3 (4 字节)
+```
+
+对应汇编宏 `UartSendInt`。**每发一帧都需要重写 CTRL**，因为 `TX_EN` 硬件自动清零。
+
+### 6.4 接收 1 字节示例
+
+```
+启动接收:
+    CTRL = 0x0001;                       // RX_EN=1, RX_CNT_MAX=0 (1 字节)
+
+读取数据 (硬件填满后会自动清 RX_EN):
+    byte = RX_BUF >> 24;                 // 单字节位于 [31:24]
+                                         // 读 RX_BUF 后 RX_PTR/RX_BUF 自动清零
+```
+
+对应汇编宏 `UartRecvByte`。
+
+### 6.5 中断模式
+
+主循环周期性发送 `"Hello world!\r\n"`，串口接收到的字节通过中断原样回送。
+
+```
+主循环:
+    1. 等待 TX_VALID==0, 调用 UartSendInt(0x4865_6C6C)   // "Hell"
+    2. 等待 TX_VALID==0, 调用 UartSendInt(0x6F20_776F)   // "o wo"
+    3. 等待 TX_VALID==0, 调用 UartSendInt(0x726C_6421)   // "rld!"
+    4. 等待 TX_VALID==0, 调用 UartSendByte(0x0A)         // "\n"
+    5. 等待 TX_VALID==0, 调用 UartSendByte(0x0D)         // "\r"
+    6. 延时, 跳回 1
+
+ISR (RX_VALID 上升沿):
     1. 关 CPU 中断使能 (防止重入)
-    2. 等待 TX_STATUS[8] == 0
-    3. tmp = RX_BUF        // 读后硬件清 RX_PTR
-    4. TX_BUF = tmp
-    5. CTRL   = 0x7B       // 重新触发 TX
-    6. 开 CPU 中断使能
-    7. 跳回主程序
+    2. CTRL = 0x0001;            读取 RX_BUF >> 24       // UartRecvByte
+    3. 等待 TX_VALID==0
+    4. TX_BUF = byte << 24;  CTRL = 0x0010              // UartSendByter 回送
+    5. 开 CPU 中断使能
+    6. jmp r2[15:0]              返回主程序
 ```
 
-### 6.5 软复位
+### 6.6 软复位
 
-写 `CTRL[31] = 1`，下一拍下层 `uart_top` 的 `rst_n` 被拉低。由于 CTRL 在每周期会被掩码 `0x7FFF_FFEE`，软复位为**单拍脉冲**，无需手动清零。
+如需在运行中复位 UART 物理层，写 `CTRL[31] = 1` 即可；硬件下一拍即将下层 `uart_top` 的 `rst_n` 拉低。
 
-### 6.6 寄存器掩码副作用
+### 6.7 寄存器副作用速查
 
 下列副作用由硬件自动完成，软件无需显式操作：
 
@@ -247,8 +277,8 @@ ISR:
 |------|---------|
 | 读 `RX_BUF` | `RX_STATUS[1:0] ← 0`，`RX_BUF ← 0` |
 | 写 `TX_BUF` | `TX_STATUS[1:0] ← 0` |
-| CTRL 持续保持 | 每周期与 `0x7FFF_FFEE` 相与，`RX_EN/TX_EN` 自清 |
-| 一帧收/发完成 | 对应 `EN` 位被硬件清零 |
+| RX 收满 (`RX_CNT == RX_CNT_MAX`) | `CTRL.RX_EN ← 0` |
+| TX 发完 (`TX_CNT == TX_CNT_MAX`) | `CTRL.TX_EN ← 0` |
 
 ---
 

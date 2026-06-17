@@ -1,12 +1,6 @@
 `timescale 1ns / 1ps
 //================================================================================
-//
-//  ███╗   ███╗███████╗██████╗  ██████╗███████╗██████╗ 
-//  ████╗ ████║██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗
-//  ██╔████╔██║█████╗  ██████╔╝██║     █████╗  ██████╔╝
-//  ██║╚██╔╝██║██╔══╝  ██╔══██╗██║     ██╔══╝  ██╔══██╗
-//  ██║ ╚═╝ ██║███████╗██║  ██║╚██████╗███████╗██║  ██║
-//  ╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝  ╚═╝
+//  MERC32
 //
 //--------------------------------------------------------------------------------
 //  Author      : Mercer
@@ -32,15 +26,16 @@
 // `define IF_AVALON
 // `define IF_DRP
 
-module MERC32_top (
+module MERC32_top #(
+    // ILB/DLB address widths are word-address widths. The maximum supported
+    // value is 16 because the MERC32 PC and local address fields are 16 bits.
+    parameter   ILB_ADDR_WIDTH          = 16,
+    parameter   DLB_ADDR_WIDTH          = 16
+) (
     input                               clk,
     input                               rst_n,
 
-    input                               interrupt,
-
-    output                              prog_load,
-    output  [15:0]                      prog_addr,
-    input   [31:0]                      prog_data
+    input                               interrupt
 
 `ifdef IF_AXI_LITE
     ,
@@ -110,37 +105,84 @@ module MERC32_top (
 `endif
 );
 
-    //----------------------------------------------------------------------------
-    // Internal Local Bus signals (CPU side)
-    //----------------------------------------------------------------------------
-    wire                                cpu_lb_rden;
-    wire                                cpu_lb_wren;
-    wire    [31:0]                      cpu_lb_addr;
-    wire    [31:0]                      cpu_lb_wdata;
-    wire                                cpu_lb_wrack;
-    wire    [31:0]                      cpu_lb_rdata;
-    wire                                cpu_lb_valid;
+    wire                                cpu_plb_rden;
+    wire                                cpu_plb_wren;
+    wire    [31:0]                      cpu_plb_addr;
+    wire    [31:0]                      cpu_plb_wdata;
+    wire                                cpu_plb_wrack;
+    wire    [31:0]                      cpu_plb_rdata;
+    wire                                cpu_plb_valid;
+
+    wire                                ilb_en;
+    wire                                ilb_we;
+    wire    [ILB_ADDR_WIDTH-1:0]        ilb_addr;
+    wire    [31:0]                      ilb_wdata;
+    wire    [31:0]                      ilb_rdata;
+
+    wire                                dlb_en;
+    wire                                dlb_we;
+    wire    [DLB_ADDR_WIDTH-1:0]        dlb_addr;
+    wire    [31:0]                      dlb_wdata;
+    wire    [31:0]                      dlb_rdata;
 
     //----------------------------------------------------------------------------
     // merc32_core instantiation
     //----------------------------------------------------------------------------
-    merc32_core u_merc32_core (
+    merc32_core #(
+        .ILB_ADDR_WIDTH                 (ILB_ADDR_WIDTH ),
+        .DLB_ADDR_WIDTH                 (DLB_ADDR_WIDTH ))
+    u_merc32_core (
         .clk                            (clk            ),
         .rst_n                          (rst_n          ),
 
         .interrupt                      (interrupt      ),
 
-        .prog_load                      (prog_load      ),
-        .prog_addr                      (prog_addr      ),
-        .prog_data                      (prog_data      ),
+        .dlb_en                         (dlb_en         ),
+        .dlb_we                         (dlb_we         ),
+        .dlb_addr                       (dlb_addr       ),
+        .dlb_wdata                      (dlb_wdata      ),
+        .dlb_rdata                      (dlb_rdata      ),
 
-        .lb_rden                        (cpu_lb_rden    ),
-        .lb_wren                        (cpu_lb_wren    ),
-        .lb_addr                        (cpu_lb_addr    ),
-        .lb_wdata                       (cpu_lb_wdata   ),
-        .lb_wrack                       (cpu_lb_wrack   ),
-        .lb_rdata                       (cpu_lb_rdata   ),
-        .lb_valid                       (cpu_lb_valid   )
+        .ilb_en                         (ilb_en         ),
+        .ilb_we                         (ilb_we         ),
+        .ilb_addr                       (ilb_addr       ),
+        .ilb_wdata                      (ilb_wdata      ),
+        .ilb_rdata                      (ilb_rdata      ),
+
+        .plb_rden                       (cpu_plb_rden   ),
+        .plb_wren                       (cpu_plb_wren   ),
+        .plb_addr                       (cpu_plb_addr   ),
+        .plb_wdata                      (cpu_plb_wdata  ),
+        .plb_wrack                      (cpu_plb_wrack  ),
+        .plb_rdata                      (cpu_plb_rdata  ),
+        .plb_valid                      (cpu_plb_valid  )
+    );
+
+    //----------------------------------------------------------------------------
+    // Local instruction and data memories
+    //----------------------------------------------------------------------------
+    spram #(
+        .DATA_WIDTH                     (32             ),
+        .ADDR_WIDTH                     (ILB_ADDR_WIDTH ))
+    u_ilb_ram (
+        .clk                            (clk            ),
+        .en                             (ilb_en         ),
+        .we                             (ilb_we         ),
+        .din                            (ilb_wdata      ),
+        .dout                           (ilb_rdata      ),
+        .addr                           (ilb_addr       )
+    );
+
+    spram #(
+        .DATA_WIDTH                     (32             ),
+        .ADDR_WIDTH                     (DLB_ADDR_WIDTH ))
+    u_dlb_ram (
+        .clk                            (clk            ),
+        .en                             (dlb_en         ),
+        .we                             (dlb_we         ),
+        .din                            (dlb_wdata      ),
+        .dout                           (dlb_rdata      ),
+        .addr                           (dlb_addr       )
     );
 
     //----------------------------------------------------------------------------
@@ -156,13 +198,13 @@ module MERC32_top (
         .clk                            (clk            ),
         .rst_n                          (rst_n          ),
 
-        .lb_rden                        (cpu_lb_rden    ),
-        .lb_wren                        (cpu_lb_wren    ),
-        .lb_wdata                       (cpu_lb_wdata   ),
-        .lb_addr                        (cpu_lb_addr    ),
-        .lb_rdata                       (cpu_lb_rdata   ),
-        .lb_valid                       (cpu_lb_valid   ),
-        .lb_wrack                       (cpu_lb_wrack   ),
+        .lb_rden                        (cpu_plb_rden    ),
+        .lb_wren                        (cpu_plb_wren    ),
+        .lb_wdata                       (cpu_plb_wdata   ),
+        .lb_addr                        (cpu_plb_addr    ),
+        .lb_rdata                       (cpu_plb_rdata   ),
+        .lb_valid                       (cpu_plb_valid   ),
+        .lb_wrack                       (cpu_plb_wrack   ),
 
         .m_axi_awvalid                  (m_axi_awvalid  ),
         .m_axi_awready                  (m_axi_awready  ),
@@ -191,13 +233,13 @@ module MERC32_top (
         .clk                            (clk            ),
         .rst_n                          (rst_n          ),
 
-        .lb_rden                        (cpu_lb_rden    ),
-        .lb_wren                        (cpu_lb_wren    ),
-        .lb_wdata                       (cpu_lb_wdata   ),
-        .lb_addr                        (cpu_lb_addr    ),
-        .lb_rdata                       (cpu_lb_rdata   ),
-        .lb_valid                       (cpu_lb_valid   ),
-        .lb_wrack                       (cpu_lb_wrack   ),
+        .lb_rden                        (cpu_plb_rden    ),
+        .lb_wren                        (cpu_plb_wren    ),
+        .lb_wdata                       (cpu_plb_wdata   ),
+        .lb_addr                        (cpu_plb_addr    ),
+        .lb_rdata                       (cpu_plb_rdata   ),
+        .lb_valid                       (cpu_plb_valid   ),
+        .lb_wrack                       (cpu_plb_wrack   ),
 
         .m_apb_psel                     (m_apb_psel     ),
         .m_apb_penable                  (m_apb_penable  ),
@@ -216,13 +258,13 @@ module MERC32_top (
         .clk                            (clk            ),
         .rst_n                          (rst_n          ),
 
-        .lb_rden                        (cpu_lb_rden    ),
-        .lb_wren                        (cpu_lb_wren    ),
-        .lb_wdata                       (cpu_lb_wdata   ),
-        .lb_addr                        (cpu_lb_addr    ),
-        .lb_rdata                       (cpu_lb_rdata   ),
-        .lb_valid                       (cpu_lb_valid   ),
-        .lb_wrack                       (cpu_lb_wrack   ),
+        .lb_rden                        (cpu_plb_rden    ),
+        .lb_wren                        (cpu_plb_wren    ),
+        .lb_wdata                       (cpu_plb_wdata   ),
+        .lb_addr                        (cpu_plb_addr    ),
+        .lb_rdata                       (cpu_plb_rdata   ),
+        .lb_valid                       (cpu_plb_valid   ),
+        .lb_wrack                       (cpu_plb_wrack   ),
 
         .m_wb_cyc_o                     (m_wb_cyc_o     ),
         .m_wb_stb_o                     (m_wb_stb_o     ),
@@ -242,13 +284,13 @@ module MERC32_top (
         .clk                            (clk                ),
         .rst_n                          (rst_n              ),
 
-        .lb_rden                        (cpu_lb_rden        ),
-        .lb_wren                        (cpu_lb_wren        ),
-        .lb_wdata                       (cpu_lb_wdata       ),
-        .lb_addr                        (cpu_lb_addr        ),
-        .lb_rdata                       (cpu_lb_rdata       ),
-        .lb_valid                       (cpu_lb_valid       ),
-        .lb_wrack                       (cpu_lb_wrack       ),
+        .lb_rden                        (cpu_plb_rden        ),
+        .lb_wren                        (cpu_plb_wren        ),
+        .lb_wdata                       (cpu_plb_wdata       ),
+        .lb_addr                        (cpu_plb_addr        ),
+        .lb_rdata                       (cpu_plb_rdata       ),
+        .lb_valid                       (cpu_plb_valid       ),
+        .lb_wrack                       (cpu_plb_wrack       ),
 
         .m_av_address                   (m_av_address       ),
         .m_av_read                      (m_av_read          ),
@@ -268,13 +310,13 @@ module MERC32_top (
         .clk                            (clk            ),
         .rst_n                          (rst_n          ),
 
-        .lb_rden                        (cpu_lb_rden    ),
-        .lb_wren                        (cpu_lb_wren    ),
-        .lb_wdata                       (cpu_lb_wdata   ),
-        .lb_addr                        (cpu_lb_addr    ),
-        .lb_rdata                       (cpu_lb_rdata   ),
-        .lb_valid                       (cpu_lb_valid   ),
-        .lb_wrack                       (cpu_lb_wrack   ),
+        .lb_rden                        (cpu_plb_rden    ),
+        .lb_wren                        (cpu_plb_wren    ),
+        .lb_wdata                       (cpu_plb_wdata   ),
+        .lb_addr                        (cpu_plb_addr    ),
+        .lb_rdata                       (cpu_plb_rdata   ),
+        .lb_valid                       (cpu_plb_valid   ),
+        .lb_wrack                       (cpu_plb_wrack   ),
 
         .drp_addr                       (drp_addr       ),
         .drp_en                         (drp_en         ),
@@ -283,13 +325,13 @@ module MERC32_top (
         .drp_in                         (drp_in         ),
         .drp_out                        (drp_out        ));
 `else
-    assign lb_rden      = cpu_lb_rden;
-    assign lb_wren      = cpu_lb_wren;
-    assign lb_addr      = cpu_lb_addr;
-    assign lb_wdata     = cpu_lb_wdata;
-    assign cpu_lb_wrack = lb_wrack;
-    assign cpu_lb_rdata = lb_rdata;
-    assign cpu_lb_valid = lb_valid;
+    assign lb_rden      = cpu_plb_rden;
+    assign lb_wren      = cpu_plb_wren;
+    assign lb_addr      = cpu_plb_addr;
+    assign lb_wdata     = cpu_plb_wdata;
+    assign cpu_plb_wrack = lb_wrack;
+    assign cpu_plb_rdata = lb_rdata;
+    assign cpu_plb_valid = lb_valid;
 `endif
 
 endmodule

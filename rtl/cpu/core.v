@@ -23,23 +23,36 @@
 //================================================================================
 
 
-module merc32_core(
+module merc32_core #(
+    // ILB/DLB address widths are word-address widths. The maximum supported
+    // value is 16 because the MERC32 PC and local address fields are 16 bits.
+    parameter   ILB_ADDR_WIDTH          = 16,
+    parameter   DLB_ADDR_WIDTH          = 16
+) (
     input                               clk,
     input                               rst_n,
 
     input                               interrupt,
 
-    output                              prog_load,
-    output  reg [15:0]                  prog_addr,
-    input       [31:0]                  prog_data,
+    output                              dlb_en,
+    output                              dlb_we,
+    output      [DLB_ADDR_WIDTH-1:0]    dlb_addr,
+    output      [31:0]                  dlb_wdata,
+    input       [31:0]                  dlb_rdata,
 
-    output  reg                         lb_rden,
-    output  reg                         lb_wren,
-    output  reg [31:0]                  lb_addr,
-    output  reg [31:0]                  lb_wdata,
-    input                               lb_wrack,
-    input   [31:0]                      lb_rdata,
-    input                               lb_valid
+    output                              ilb_en,
+    output                              ilb_we,
+    output      [ILB_ADDR_WIDTH-1:0]    ilb_addr,
+    output      [31:0]                  ilb_wdata,
+    input       [31:0]                  ilb_rdata,
+
+    output                              plb_rden,
+    output                              plb_wren,
+    output      [31:0]                  plb_addr,
+    output      [31:0]                  plb_wdata,
+    input                               plb_wrack,
+    input   [31:0]                      plb_rdata,
+    input                               plb_valid
     );
 
     localparam  OP_IMM                  = 4'b0001;
@@ -56,11 +69,9 @@ module merc32_core(
     localparam  FUNC_SRA                = 4'b1000;
     localparam  FUNC_MWR                = 4'b1001;
     localparam  FUNC_MRD                = 4'b1010;
-    localparam  FUNC_JAL                = 4'b1011;
-    localparam  FUNC_BEQ                = 4'b1100;
-    localparam  FUNC_BNE                = 4'b1101;
-    localparam  FUNC_BLT                = 4'b1110;
-    localparam  FUNC_BGE                = 4'b1111;
+    localparam  FUNC_CMP                = 4'b1011;
+    localparam  FUNC_BRC                = 4'b1100;
+    localparam  FUNC_JAL                = 4'b1101;
 
     localparam  ST_IDLE                 = 5'b00001;
     localparam  ST_LOAD                 = 5'b00010;
@@ -68,17 +79,35 @@ module merc32_core(
     localparam  ST_STEP                 = 5'b01000;
     localparam  ST_INTR                 = 5'b10000;
 
+    localparam  CMP_EQ                  = 4'd0;
+    localparam  CMP_NE                  = 4'd1;
+    localparam  CMP_SGE                 = 4'd2;
+    localparam  CMP_SLT                 = 4'd3;
+    localparam  CMP_SGT                 = 4'd4;
+    localparam  CMP_SLE                 = 4'd5;
+    localparam  CMP_UGE                 = 4'd6;
+    localparam  CMP_ULT                 = 4'd7;
+    localparam  CMP_UGT                 = 4'd8;
+    localparam  CMP_ULE                 = 4'd9;
+
     localparam  TRIG_RISE               = 2'b00;
     localparam  TRIG_FALL               = 2'b01;
     localparam  TRIG_HIGH               = 2'b10;
     localparam  TRIG_LOW                = 2'b11;
 
     reg     [4:0]                       cpu_state;
+    reg     [15:0]                      prog_addr;
     reg     [15:0]                      prog_next;
 
     reg                                 alu_vld;
     reg     [3:0]                       alu_ptr;
     reg     signed  [31:0]              alu_data;
+
+    reg                                 uge;
+    reg                                 ugt;
+    reg                                 sge;
+    reg                                 sgt;
+    reg                                 eq;
 
     wire                                trig_en;
     wire    [1:0]                       trig_mode;
@@ -100,33 +129,65 @@ module merc32_core(
     wire    [3:0]                       opc;
     wire    [3:0]                       fun;
 
-    wire                                prog_busy;
     wire                                prog_exec;
     wire                                prog_step;
+    wire                                inst_mwr;
+    wire                                inst_mrd;
+    reg                                 lb_req;
+    reg                                 lb_wren;
+    reg     [31:0]                      lb_addr;
+    reg     [31:0]                      lb_wdata;
+    wire    [31:0]                      lb_rdata;
+    wire                                lb_rack;
 
-    assign  imm                         = prog_data[31:16];
-    assign  rs1                         = prog_data[19:16];
-    assign  rs2                         = prog_data[15:12];
-    assign  rd                          = prog_data[11:8];
-    assign  opc                         = prog_data[7:4];
-    assign  fun                         = prog_data[3:0];
+    wire                                data_addr_hit;
+    wire                                peri_addr_hit;
+    wire                                miss_addr_hit;
+    wire                                peri_done;
 
-    assign  prog_busy = cpu_state != ST_IDLE;
-    assign  prog_load = cpu_state == ST_LOAD;
+    reg                                 data_pending;
+    reg                                 miss_pending;
+
+    assign  imm = ilb_rdata[31:16];
+    assign  rs1 = ilb_rdata[19:16];
+    assign  rs2 = ilb_rdata[15:12];
+    assign  rd  = ilb_rdata[11:8];
+    assign  opc = ilb_rdata[7:4];
+    assign  fun = ilb_rdata[3:0];
+    
+    assign  ilb_en    = cpu_state == ST_LOAD;
+    assign  ilb_we    = 1'b0;
+    assign  ilb_addr  = prog_addr;
+    assign  ilb_wdata = 32'h0;
+
     assign  prog_exec = cpu_state == ST_EXEC;
-    assign  prog_step = 
-        {opc, fun} == {OP_IMM, FUNC_MWR} ? lb_wrack : 
-        {opc, fun} == {OP_REG, FUNC_MWR} ? lb_wrack : 
-        {opc, fun} == {OP_IMM, FUNC_MRD} ? lb_valid : 
-        {opc, fun} == {OP_REG, FUNC_MRD} ? lb_valid : 
-        cpu_state == ST_STEP;
+    assign  inst_mwr  = ({opc, fun} == {OP_IMM, FUNC_MWR} || {opc, fun} == {OP_REG, FUNC_MWR});
+    assign  inst_mrd  = ({opc, fun} == {OP_IMM, FUNC_MRD} || {opc, fun} == {OP_REG, FUNC_MRD});
+    assign  prog_step = (inst_mwr || inst_mrd) ? lb_rack : cpu_state == ST_STEP;
 
-    assign  trig_en                     = regi_int[1][0];
-    assign  trig_mode                   = regi_int[1][2:1];
-    assign  intr_addr                   = regi_int[2][31:16];
-    assign  ret_addr                    = regi_int[2][15:0];
+    assign  data_addr_hit = (lb_addr >= 32'h0010_0000) && (lb_addr < (32'h0010_0000 + (32'd1 << (DLB_ADDR_WIDTH + 2))));
+    assign  peri_addr_hit = lb_addr >= 32'h1000_0000;
+    assign  miss_addr_hit = ~data_addr_hit & ~peri_addr_hit;
+    assign  peri_done     = plb_valid | plb_wrack;
 
-    assign trig_hit  = 
+    assign  dlb_en        = lb_req & data_addr_hit;
+    assign  dlb_we        = lb_req & data_addr_hit & lb_wren;
+    assign  dlb_addr      = lb_addr[DLB_ADDR_WIDTH+1:2];
+    assign  dlb_wdata     = lb_wdata;
+
+    assign  plb_rden      = lb_req & peri_addr_hit & ~lb_wren;
+    assign  plb_wren      = lb_req & peri_addr_hit & lb_wren;
+    assign  plb_addr      = lb_addr;
+    assign  plb_wdata     = lb_wdata;
+
+    assign  lb_rack       = data_pending | miss_pending | peri_done;
+    assign  lb_rdata      = data_pending ? dlb_rdata : plb_valid ? plb_rdata : 32'hdece;
+
+    assign  trig_en   = regi_int[1][0];
+    assign  trig_mode = regi_int[1][2:1];
+    assign  intr_addr = regi_int[2][31:16];
+    assign  ret_addr  = regi_int[2][15:0];
+    assign  trig_hit  = 
         (trig_mode == TRIG_RISE) ?  intr_ff1 & ~intr_ff2 :
         (trig_mode == TRIG_FALL) ? ~intr_ff1 &  intr_ff2 :
         (trig_mode == TRIG_HIGH) ?  intr_ff2 :
@@ -150,21 +211,49 @@ module merc32_core(
     always @(posedge clk) begin
         if(!rst_n) begin
             prog_addr <= 0;
+        end else if(prog_step) begin
+            prog_addr <= intr_flag ? intr_addr : prog_next;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(!rst_n) begin
             prog_next <= 0;
-        end else begin
-            prog_addr <= prog_step ? (intr_flag ? intr_addr : prog_next) : prog_addr;
+        end else if(prog_exec) begin
             case({opc, fun})
-                {OP_IMM, FUNC_JAL}:prog_next <= prog_exec ? (regi_int[rs2] + imm) : prog_next;
-                {OP_IMM, FUNC_BEQ}:prog_next <= prog_exec ? (regi_int[rs2] == regi_int[rd] ? imm : prog_addr + 1) : prog_next;
-                {OP_IMM, FUNC_BNE}:prog_next <= prog_exec ? (regi_int[rs2] != regi_int[rd] ? imm : prog_addr + 1) : prog_next;
-                {OP_IMM, FUNC_BLT}:prog_next <= prog_exec ? ($signed(regi_int[rs2]) < $signed(regi_int[rd]) ? imm : prog_addr + 1) : prog_next;
-                {OP_IMM, FUNC_BGE}:prog_next <= prog_exec ? ($signed(regi_int[rs2]) >= $signed(regi_int[rd]) ? imm : prog_addr + 1) : prog_next;
-                {OP_REG, FUNC_JAL}:prog_next <= prog_exec ? (regi_int[rs2] + regi_int[rs1]) : prog_next;
-                {OP_REG, FUNC_BEQ}:prog_next <= prog_exec ? (regi_int[rs2] == regi_int[rd] ? regi_int[rs1] : prog_addr + 1) : prog_next;
-                {OP_REG, FUNC_BNE}:prog_next <= prog_exec ? (regi_int[rs2] != regi_int[rd] ? regi_int[rs1] : prog_addr + 1) : prog_next;
-                {OP_REG, FUNC_BLT}:prog_next <= prog_exec ? ($signed(regi_int[rs2]) < $signed(regi_int[rd]) ? regi_int[rs1] : prog_addr + 1) : prog_next;
-                {OP_REG, FUNC_BGE}:prog_next <= prog_exec ? ($signed(regi_int[rs2]) >= $signed(regi_int[rd]) ? regi_int[rs1] : prog_addr + 1) : prog_next;
-                default:prog_next <= prog_exec ? prog_addr + 1 : prog_next;
+                {OP_IMM, FUNC_BRC}:begin
+                    case(rd)
+                        CMP_EQ:prog_next <= eq ? regi_int[rs2] + imm : prog_addr + 1;
+                        CMP_NE:prog_next <= ~eq ? regi_int[rs2] + imm : prog_addr + 1;
+                        CMP_SGE:prog_next <= sge ? regi_int[rs2] + imm : prog_addr + 1;
+                        CMP_SLT:prog_next <= ~sge ? regi_int[rs2] + imm : prog_addr + 1;
+                        CMP_SGT:prog_next <= sgt ? regi_int[rs2] + imm : prog_addr + 1;
+                        CMP_SLE:prog_next <= ~sgt ? regi_int[rs2] + imm : prog_addr + 1;
+                        CMP_UGE:prog_next <= uge ? regi_int[rs2] + imm : prog_addr + 1;
+                        CMP_ULT:prog_next <= ~uge ? regi_int[rs2] + imm : prog_addr + 1;
+                        CMP_UGT:prog_next <= ugt ? regi_int[rs2] + imm : prog_addr + 1;
+                        CMP_ULE:prog_next <= ~ugt ? regi_int[rs2] + imm : prog_addr + 1;
+                        default:prog_next <= prog_addr + 1;
+                    endcase
+                end
+                {OP_IMM, FUNC_JAL}:prog_next <= regi_int[rs2] + imm;
+                {OP_REG, FUNC_BRC}:begin
+                    case(rd)
+                        CMP_EQ:prog_next <= eq ? regi_int[rs2] + regi_int[rs1] : prog_addr + 1;
+                        CMP_NE:prog_next <= ~eq ? regi_int[rs2] + regi_int[rs1] : prog_addr + 1;
+                        CMP_SGE:prog_next <= sge ? regi_int[rs2] + regi_int[rs1] : prog_addr + 1;
+                        CMP_SLT:prog_next <= ~sge ? regi_int[rs2] + regi_int[rs1] : prog_addr + 1;
+                        CMP_SGT:prog_next <= sgt ? regi_int[rs2] + regi_int[rs1] : prog_addr + 1;
+                        CMP_SLE:prog_next <= ~sgt ? regi_int[rs2] + regi_int[rs1] : prog_addr + 1;
+                        CMP_UGE:prog_next <= uge ? regi_int[rs2] + regi_int[rs1] : prog_addr + 1;
+                        CMP_ULT:prog_next <= ~uge ? regi_int[rs2] + regi_int[rs1] : prog_addr + 1;
+                        CMP_UGT:prog_next <= ugt ? regi_int[rs2] + regi_int[rs1] : prog_addr + 1;
+                        CMP_ULE:prog_next <= ~ugt ? regi_int[rs2] + regi_int[rs1] : prog_addr + 1;
+                        default:prog_next <= prog_addr + 1;
+                    endcase
+                end
+                {OP_REG, FUNC_JAL}:prog_next <= regi_int[rs2] + regi_int[rs1];
+                default:prog_next <= prog_addr + 1;
             endcase
         end
     end
@@ -174,7 +263,7 @@ module merc32_core(
             alu_vld <= 1'b0;
             alu_ptr <= 4'd0;
             alu_data <= 32'h0;
-        end else if(prog_busy) begin
+        end else begin
             alu_ptr <= rd;
             case({opc, fun})
                 {OP_IMM, FUNC_SET}:begin
@@ -214,8 +303,8 @@ module merc32_core(
                     alu_data <= prog_exec ? regi_int[rs2] >>> imm : alu_data;
                 end
                 {OP_IMM, FUNC_MRD}:begin
-                    alu_vld <= lb_valid;
-                    alu_data <= lb_valid ? lb_rdata : alu_data;
+                    alu_vld <= lb_rack;
+                    alu_data <= lb_rack ? lb_rdata : alu_data;
                 end
                 {OP_IMM, FUNC_JAL}:begin
                     alu_vld <= prog_exec;
@@ -258,12 +347,39 @@ module merc32_core(
                     alu_data <= prog_exec ? regi_int[rs2] >>> regi_int[rs1] : alu_data;
                 end
                 {OP_REG, FUNC_MRD}:begin
-                    alu_vld <= lb_valid;
-                    alu_data <= lb_valid ? lb_rdata : alu_data;
+                    alu_vld <= lb_rack;
+                    alu_data <= lb_rack ? lb_rdata : alu_data;
                 end
                 {OP_REG, FUNC_JAL}:begin
                     alu_vld <= prog_exec;
                     alu_data <= prog_exec ? prog_addr + 1 : alu_data;
+                end
+            endcase
+        end
+    end
+
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            ugt <= 0;
+            uge <= 0;
+            sgt <= 0;
+            sge <= 0;
+            eq <= 0;
+        end else if(prog_exec) begin
+            case({opc, fun})
+                {OP_IMM, FUNC_CMP}:begin
+                    ugt <= $unsigned(regi_int[rs2]) > $unsigned(imm);
+                    uge <= $unsigned(regi_int[rs2]) >= $unsigned(imm);
+                    sgt <= $signed(regi_int[rs2]) > $signed(imm);
+                    sge <= $signed(regi_int[rs2]) >= $signed(imm);
+                    eq <= regi_int[rs2] == imm;
+                end
+                {OP_REG, FUNC_CMP}:begin
+                    ugt <= $unsigned(regi_int[rs2]) > $unsigned(regi_int[rs1]);
+                    uge <= $unsigned(regi_int[rs2]) >= $unsigned(regi_int[rs1]);
+                    sgt <= $signed(regi_int[rs2]) > $signed(regi_int[rs1]);
+                    sge <= $signed(regi_int[rs2]) >= $signed(regi_int[rs1]);
+                    eq <= regi_int[rs2] == regi_int[rs1];
                 end
             endcase
         end
@@ -296,7 +412,7 @@ module merc32_core(
             endcase
         end else begin
             regi_int[00] <= 32'h0;
-            regi_int[15] <= prog_addr;
+            regi_int[15] <= {uge, ugt, sge, sgt, eq, 11'b0, prog_addr};
         end
     end
 
@@ -316,26 +432,28 @@ module merc32_core(
 
     always @(posedge clk) begin
         if(!rst_n) begin
-            lb_wren <= 0;
-            lb_rden <= 0;
-            lb_addr <= 0;
-            lb_wdata <= 0;
+            lb_req <= 1'b0;
+            lb_wren <= 1'b0;
+            lb_addr <= 32'h0;
+            lb_wdata <= 32'h0;
         end else begin
-            lb_wren <= 
-                ({opc, fun} == {OP_IMM, FUNC_MWR}
-                || {opc, fun} == {OP_REG, FUNC_MWR})
-                && prog_exec;
-            lb_rden <= 
-                ({opc, fun} == {OP_IMM, FUNC_MRD}
-                || {opc, fun} == {OP_REG, FUNC_MRD})
-                && prog_exec;
-            lb_wdata <= 
-                ({opc, fun} == {OP_IMM, FUNC_MWR}
-                || {opc, fun} == {OP_REG, FUNC_MWR})
-                && prog_exec ? regi_int[rd] : lb_wdata;
-            lb_addr <= 
-                opc == OP_IMM ? regi_int[rs2] + imm : 
-                opc == OP_REG  ? regi_int[rs2] + regi_int[rs1] : lb_addr;
+            lb_req <= (inst_mwr || inst_mrd) && prog_exec;
+            lb_wren <= inst_mwr && prog_exec;
+            lb_wdata <= regi_int[rd];
+            lb_addr <=
+                opc == OP_IMM ? regi_int[rs2] + imm :
+                opc == OP_REG ? regi_int[rs2] + regi_int[rs1] :
+                32'h0;
+        end
+    end
+
+    always @(posedge clk) begin
+        if(!rst_n) begin
+            data_pending <= 1'b0;
+            miss_pending <= 1'b0;
+        end else begin
+            data_pending <= lb_req & data_addr_hit;
+            miss_pending <= lb_req & miss_addr_hit;
         end
     end
 

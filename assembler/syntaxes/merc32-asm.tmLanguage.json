@@ -10,6 +10,12 @@
       "include": "#keywords"
     },
     {
+      "include": "#conditions"
+    },
+    {
+      "include": "#characters"
+    },
+    {
       "include": "#registers"
     },
     {
@@ -33,15 +39,31 @@
         }
       ]
     },
+    "conditions": {
+      "patterns": [
+        {
+          "name": "variable.parameter.condition.merc32-asm",
+          "match": "\"(?:==|!=|<=|>=|<|>|eq|ne|ge|lt|gt|le|sge|slt|sgt|sle|uge|ult|ugt|ule)\""
+        }
+      ]
+    },
+    "characters": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.character.merc32-asm",
+          "match": "\"(?:\\\\(?:[nrt0\"\\\\]|x[0-9a-fA-F]{2})|[^\"\\\\]){1,2}\""
+        }
+      ]
+    },
     "keywords": {
       "patterns": [
         {
           "name": "keyword.control.directive.merc32-asm",
-          "match": "\\.(equ|prog|ifdef|elsif|else|endif|macro|endm|include|rept|endr)\\b"
+          "match": "\\.(equ|prog|entry|ifdef|elsif|else|endif|macro|endm|include|rept|endr)\\b"
         },
         {
           "name": "keyword.control.instruction.merc32-asm",
-          "match": "\\b(mov|jmp|brc)\\b"
+          "match": "\\b(mov|cmp|jmp|brc|brcu)\\b"
         }
       ]
     },

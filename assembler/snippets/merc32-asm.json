@@ -37,12 +37,26 @@
     ],
     "description": "jump to target and save PC+1"
   },
+  "cmp": {
+    "prefix": "cmp",
+    "body": [
+      "cmp ${1:r1}, ${2:r0}"
+    ],
+    "description": "compare register with register or immediate"
+  },
   "brc": {
     "prefix": "brc",
     "body": [
-      "brc ${1:target}, ${2:r1} ${3|==,!=,<,>=|} ${4:r0}"
+      "brc ${1:target}, \"${2|==,!=,<,<=,>,>=|}\""
     ],
-    "description": "conditional branch"
+    "description": "conditional branch using cmp flags"
+  },
+  "brcu": {
+    "prefix": "brcu",
+    "body": [
+      "brcu ${1:target}, \"${2|==,!=,<,<=,>,>=|}\""
+    ],
+    "description": "unsigned conditional branch using cmp flags"
   },
   "label": {
     "prefix": "label",
@@ -60,6 +74,16 @@
       ".prog ${1:program_name}"
     ],
     "description": "program output name"
+  },
+  ".entry": {
+    "prefix": [
+      ".entry",
+      "entry"
+    ],
+    "body": [
+      ".entry ${1:start}"
+    ],
+    "description": "program entry label"
   },
   ".equ": {
     "prefix": [

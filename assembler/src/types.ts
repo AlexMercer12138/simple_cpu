@@ -12,6 +12,7 @@ export interface AssemblyDebugInfo {
     debugCode: string;
     debugSymbols: string;
     replacedCode: string;
+    entryLabel?: string;
 }
 
 export interface FileAssemblyResult {
