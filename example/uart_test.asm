@@ -46,16 +46,20 @@ jmp ra, r14         // 返回主循环
 .endm
 
 .macro branch_eq(target, lhs, rhs)
-cmp lhs, rhs
-brc target, "eq"
+    cmp lhs, rhs
+    brc target, "eq"
 .endm
 
 .macro branch_ne(target, lhs, rhs)
-cmp lhs, rhs
-brc target, "ne"
+    cmp lhs, rhs
+    brc target, "ne"
 .endm
 
 .macro UartSendByte(Rbase, Rbyte, value)
+    mov Rbyte, [Rbase + 20]
+    mov Rbyte, Rbyte >> 9
+    cmp Rbyte, 0x1
+    brc r15 - 3, "eq"
     mov Rbyte, value
     mov Rbyte, Rbyte << 24
     mov [Rbase + 16], Rbyte
@@ -64,6 +68,10 @@ brc target, "ne"
 .endm
 
 .macro UartSendInt(Rbase, Rint, valhi, vallo)
+    mov Rint, [Rbase + 20]
+    mov Rint, Rint >> 9
+    cmp Rint, 0x1
+    brc r15 - 3, "eq"
     mov Rint, valhi
     mov Rint, Rint << 16
     mov Rint, Rint + vallo
@@ -72,7 +80,12 @@ brc target, "ne"
     mov [Rbase], Rint
 .endm
 
-.macro UartSendByter(Rbase, Rbyte)
+.macro UartSendByteR(Rbase, Rbyte, Rsrc)
+    mov Rbyte, [Rbase + 20]
+    mov Rbyte, Rbyte >> 9
+    cmp Rbyte, 0x1
+    brc r15 - 3, "eq"
+    mov Rbyte, Rsrc
     mov Rbyte, Rbyte << 24
     mov [Rbase + 16], Rbyte
     mov Rbyte, 0x0010
@@ -104,7 +117,6 @@ start:
     mov [r3 + 24], r4       // offset 0x18
 
     // 配置 CPU 中断: 上升沿触发, 跳转到 isr
-    
     mov r4, isr             // 保存中断跳转地址
     mov r2, r4 << 16        // 写入高 16 位
     mov r1, 1               // 中断使能，上升沿触发
@@ -120,40 +132,10 @@ start:
 // ----------------------------- 主循环 ---------------------------------------
 main_loop:
 
-wait_trans_ready:
-    mov r4, [r3 + 20]               // Read Tx status
-    mov r4, r4 >> 9                 // Shift Tx busy bit to LSB
-    mov r7, 0x1
-    branch_eq(wait_trans_ready, r4, r7)  // Keep LSB only
-
     UartSendInt(r3, r4, 0x4865, 0x6c6c) // "Hell"
-wait_trans0:
-    mov r4, [r3 + 20]           // Read Tx status
-    mov r4, r4 >> 9             // Shift Tx busy bit to LSB
-    mov r7, 0x1
-    branch_eq(wait_trans0, r4, r7)   // Keep LSB only
-
     UartSendInt(r3, r4, 0x6f20, 0x776f) // "o wo"
-wait_trans1:
-    mov r4, [r3 + 20]           // Read Tx status
-    mov r4, r4 >> 9             // Shift Tx busy bit to LSB
-    mov r7, 0x1
-    branch_eq(wait_trans1, r4, r7)   // Keep LSB only
-
     UartSendInt(r3, r4, 0x726c, 0x6421) // "rld!"
-wait_trans2:
-    mov r4, [r3 + 20]           // Read Tx status
-    mov r4, r4 >> 9             // Shift Tx busy bit to LSB
-    mov r7, 0x1
-    branch_eq(wait_trans2, r4, r7)   // Keep LSB only
-
     UartSendByte(r3, r4, 0x0a) // "\n"
-wait_trans3:
-    mov r4, [r3 + 20]           // Read Tx status
-    mov r4, r4 >> 9             // Shift Tx busy bit to LSB
-    mov r7, 0x1
-    branch_eq(wait_trans3, r4, r7)   // Keep LSB only
-
     UartSendByte(r3, r4, 0x0d) // "\r"
 
 delay:
@@ -162,21 +144,14 @@ delay:
     mov r6, 0
     jmp main_loop, r14
 
-
 // ---------------------------- 中断服务程序 ----------------------------------
 // 触发条件: rx_valid 上升沿 (接收 FIFO 有数据)
-// 行为 : 发送 "?"
+// 行为 : 字符回显
 isr:
-    interrupt_disable()     // 关闭中断使能
-    UartRecvByte(r3, r8)    // Read byte from fifo
+    interrupt_disable()         // 关闭中断使能
 
-wait_isr:
-    mov r4, [r3 + 20]           // Read Tx status
-    mov r4, r4 >> 9             // Shift Tx busy bit to LSB
-    mov r7, 0x1
-    branch_eq(wait_isr, r4, r7)      // Keep LSB only
-    UartSendByter(r3, r8)       // Loopback
-    // UartSendByte(r3, r8, 0x3f)  // "?"
+    UartRecvByte(r3, r8)        // Read byte from fifo
+    UartSendByteR(r3, r4, r8)   // Loopback
 
     interrupt_enable()          // 开启中断使能
     return_main(r13)            // 返回主循环

@@ -7,6 +7,9 @@ import { DEFAULT_OUTPUT_FORMAT, isOutputFormat, OutputFormat } from './types';
 export interface AssemblerSettings {
     outputFormat: OutputFormat;
     outputDir: string;
+    cKeepAssembly: boolean;
+    cDataBase: number;
+    cDlbAddrWidth: number;
 }
 
 export function getAssemblerSettings(sourceFile: string): AssemblerSettings {
@@ -17,7 +20,23 @@ export function getAssemblerSettings(sourceFile: string): AssemblerSettings {
     return {
         outputFormat: isOutputFormat(rawOutputFormat) ? rawOutputFormat : DEFAULT_OUTPUT_FORMAT,
         outputDir: resolveOutputDir(sourceFile, customOutputPath),
+        cKeepAssembly: config.get<boolean>('c.keepAssembly', true),
+        cDataBase: parseIntegerSetting(config.get<string>('c.dataBase', '0x00100000'), 0x0010_0000),
+        cDlbAddrWidth: config.get<number>('c.dlbAddrWidth', 16),
     };
+}
+
+function parseIntegerSetting(value: string | undefined, fallback: number): number {
+    if (!value) {
+        return fallback;
+    }
+    const trimmed = value.trim();
+    const parsed = /^0x/i.test(trimmed)
+        ? Number.parseInt(trimmed.slice(2), 16)
+        : /^0b/i.test(trimmed)
+            ? Number.parseInt(trimmed.slice(2), 2)
+            : Number.parseInt(trimmed, 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function resolveOutputDir(sourceFile: string, customPath: string): string {

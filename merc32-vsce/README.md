@@ -1,4 +1,6 @@
-# MERC32 Assembly for VSCode
+# MERC32 Toolchain for VSCode
+
+This directory is the unified VS Code extension for the MERC32 toolchain. It contains the assembler, the Tiny C compiler under `src/cCompiler`, and the MERC32 Activity Bar sidebar used to organize build commands, artifacts, future software simulation, and toolchain settings.
 
 [![Version](https://img.shields.io/badge/Version-2.0.0-blue.svg)](https://github.com/AlexMercer12138/MERC32)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

@@ -1,7 +1,7 @@
 {
-  "name": "merc32-asm",
-  "displayName": "MERC32 Assembly",
-  "description": "Syntax highlighting, snippets and assembler integration for MERC32 Assembly",
+  "name": "merc32-vsce",
+  "displayName": "MERC32 Toolchain",
+  "description": "VS Code toolchain for MERC32 assembly and Tiny C",
   "version": "2.0.0",
   "publisher": "Vikai-mercer",
   "icon": "images/icon.png",
@@ -20,7 +20,13 @@
     "verilog"
   ],
   "activationEvents": [
-    "onLanguage:merc32-asm"
+    "onLanguage:merc32-asm",
+    "onLanguage:c",
+    "onView:merc32-toolchain.build",
+    "onCommand:merc32-asm.compile",
+    "onCommand:merc32-asm.assembleActive",
+    "onCommand:merc32-asm.compileCToAsm",
+    "onCommand:merc32-asm.buildCToRom"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -53,30 +59,72 @@
     "commands": [
       {
         "command": "merc32-asm.compile",
-        "title": "Compile",
+        "title": "MERC32: Build Active File",
         "icon": "$(play)"
       },
       {
+        "command": "merc32-asm.assembleActive",
+        "title": "MERC32: Assemble ASM",
+        "icon": "$(file-binary)"
+      },
+      {
+        "command": "merc32-asm.compileCToAsm",
+        "title": "MERC32: Compile C to ASM",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "merc32-asm.buildCToRom",
+        "title": "MERC32: Build C to ROM",
+        "icon": "$(package)"
+      },
+      {
+        "command": "merc32-asm.openLastArtifact",
+        "title": "MERC32: Open Last Artifact",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "merc32-asm.compilePrint",
-        "title": "Compile (Print Mode)",
+        "title": "MERC32: Assemble ASM (Print Mode)",
         "icon": "$(output)"
       },
       {
         "command": "merc32-asm.compileDebug",
-        "title": "Compile (Debug Mode)",
+        "title": "MERC32: Assemble ASM (Debug Mode)",
         "icon": "$(bug)"
       },
       {
         "command": "merc32-asm.selectCompileMode",
-        "title": "Select Compile Mode",
+        "title": "MERC32: Select Compile Mode",
         "icon": "$(chevron-down)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "merc32-toolchain",
+          "title": "MERC32",
+          "icon": "images/activitybar.svg"
+        }
+      ]
+    },
+    "views": {
+      "merc32-toolchain": [
+        {
+          "id": "merc32-toolchain.build",
+          "name": "Toolchain"
+        }
+      ]
+    },
     "menus": {
       "editor/title": [
         {
           "when": "resourceExtname == .asm",
-          "command": "merc32-asm.compile",
+          "command": "merc32-asm.assembleActive",
+          "group": "navigation@1"
+        },
+        {
+          "when": "resourceExtname == .c",
+          "command": "merc32-asm.buildCToRom",
           "group": "navigation@1"
         },
         {
@@ -112,6 +160,21 @@
           "type": "string",
           "default": "",
           "description": "Custom output directory (leave empty to use same directory as source file)"
+        },
+        "merc32-asm.c.keepAssembly": {
+          "type": "boolean",
+          "default": true,
+          "description": "Keep generated assembly when building C sources"
+        },
+        "merc32-asm.c.dataBase": {
+          "type": "string",
+          "default": "0x00100000",
+          "description": "Default DLB data base address used by the C compiler"
+        },
+        "merc32-asm.c.dlbAddrWidth": {
+          "type": "number",
+          "default": 16,
+          "description": "DLB word address width used to initialize the C stack pointer"
         }
       }
     }
@@ -125,6 +188,8 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "test:pseudo": "npm run compile && node scripts/test-pseudo-instructions.js",
+    "test:c": "npm run compile && node scripts/test-c-compiler.js",
+    "test": "npm run test:pseudo && node scripts/test-c-compiler.js",
     "watch": "tsc -watch -p ./"
   }
 }

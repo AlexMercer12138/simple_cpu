@@ -356,20 +356,21 @@ jmp r9
 
 // ---------------------------------------------------------------------------
 // Interrupt setup. r1 is interrupt control, r2 is vector/return.
-// Writing r2 captures prog_next in r2[15:0], so this write must be directly
-// before the loop that should resume after each interrupt.
+// The wait loop only uses r8-r11 because the ISR uses r3-r6 as scratch.
 // ---------------------------------------------------------------------------
 interrupt_setup:
-mov r1, 1
+data_addr(r8, STATUS_ADDR)
+data_addr(r9, HEARTBEAT_ADDR)
+mov r10, READY_CODE
+mov r11, 0
 mov r3, isr_entry
 mov r2, r3 << 16
+mov r1, 1
 
 interrupt_wait:
-write_mem(STATUS_ADDR, READY_CODE)
-data_addr(r3, HEARTBEAT_ADDR)
-mov r4, [r3]
-mov r4, r4 + 1
-mov [r3], r4
+mov [r8], r10
+mov r11, r11 + 1
+mov [r9], r11
 jmp interrupt_wait
 
 isr_entry:

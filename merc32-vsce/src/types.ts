@@ -21,6 +21,12 @@ export interface FileAssemblyResult {
     debugInfo?: AssemblyDebugInfo;
 }
 
+export interface ToolchainArtifact {
+    label: string;
+    file: string;
+    description?: string;
+}
+
 export function isOutputFormat(value: string | undefined): value is OutputFormat {
     return Boolean(value && (OUTPUT_FORMATS as readonly string[]).includes(value));
 }

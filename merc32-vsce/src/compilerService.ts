@@ -1,0 +1,70 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { compileC } from './cCompiler';
+import { assembleFile } from './assemblyService';
+import { getAssemblerSettings } from './configuration';
+import { CompileMode, FileAssemblyResult, ToolchainArtifact } from './types';
+
+export interface CCompileResult {
+    assembly: string;
+    assemblyFile: string;
+    artifacts: ToolchainArtifact[];
+}
+
+export interface CBuildResult extends CCompileResult {
+    assemblyResult: FileAssemblyResult;
+}
+
+export function compileCFileToAssembly(sourceFile: string): CCompileResult {
+    const sourceCode = fs.readFileSync(sourceFile, 'utf-8');
+    const settings = getAssemblerSettings(sourceFile);
+    const baseName = path.basename(sourceFile, path.extname(sourceFile));
+    const assemblyFile = path.join(settings.outputDir, `${baseName}.asm`);
+    const result = compileC(sourceCode, {
+        dataBase: settings.cDataBase,
+        dlbAddrWidth: settings.cDlbAddrWidth,
+        moduleName: baseName,
+    });
+
+    fs.mkdirSync(settings.outputDir, { recursive: true });
+    fs.writeFileSync(assemblyFile, result.assembly, 'utf-8');
+
+    return {
+        assembly: result.assembly,
+        assemblyFile,
+        artifacts: [
+            { label: `${baseName}.asm`, file: assemblyFile, description: 'Generated assembly' },
+        ],
+    };
+}
+
+export function buildCFileToRom(sourceFile: string, mode: CompileMode): CBuildResult {
+    const compiled = compileCFileToAssembly(sourceFile);
+    const settings = getAssemblerSettings(sourceFile);
+    const assemblyResult = assembleFile(
+        compiled.assembly,
+        compiled.assemblyFile,
+        settings.outputFormat,
+        mode,
+        settings.outputDir,
+    );
+
+    const artifacts = [...compiled.artifacts];
+    if (assemblyResult.outputFile) {
+        artifacts.push({
+            label: path.basename(assemblyResult.outputFile),
+            file: assemblyResult.outputFile,
+            description: `${settings.outputFormat.toUpperCase()} output`,
+        });
+    }
+
+    if (!settings.cKeepAssembly && fs.existsSync(compiled.assemblyFile)) {
+        fs.unlinkSync(compiled.assemblyFile);
+    }
+
+    return {
+        ...compiled,
+        assemblyResult,
+        artifacts,
+    };
+}

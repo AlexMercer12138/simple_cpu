@@ -34,11 +34,11 @@ xpr/
 *.swo
 *~
 
-# VSCode Extension
-assembler/node_modules/
-assembler/out/
-assembler/package-lock.json
-assembler/*.vsix
+# MERC32 VS Code extension
+merc32-vsce/node_modules/
+merc32-vsce/out/
+merc32-vsce/package-lock.json
+merc32-vsce/*.vsix
 
 # OS
 .DS_Store

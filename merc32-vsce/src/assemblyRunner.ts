@@ -9,15 +9,26 @@ import { CompileMode, FileAssemblyResult } from './types';
 export class AssemblyRunner implements vscode.Disposable {
     private readonly channel = vscode.window.createOutputChannel(OUTPUT_CHANNEL_NAME);
 
-    run(file: string, mode: CompileMode): void {
+    run(file: string, mode: CompileMode): FileAssemblyResult | undefined {
         try {
             const sourceCode = fs.readFileSync(file, 'utf-8');
             const { outputFormat, outputDir } = getAssemblerSettings(file);
             const result = assembleFile(sourceCode, file, outputFormat, mode, outputDir);
             this.showSuccess(mode, result);
+            return result;
         } catch (error) {
             this.showFailure(error);
+            return undefined;
         }
+    }
+
+    showInfo(message: string): void {
+        this.channel.appendLine(message);
+        this.channel.show(true);
+    }
+
+    showError(error: unknown): void {
+        this.showFailure(error);
     }
 
     dispose(): void {

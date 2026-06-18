@@ -31,8 +31,21 @@ module merc32_core #(
 ) (
     input                               clk,
     input                               rst_n,
+    input                               cpu_rst_n,
 
     input                               interrupt,
+
+    input                               dbg_halt_req,
+    input                               dbg_step_req,
+    output                              dbg_halted,
+    output      [15:0]                  dbg_pc,
+
+    input                               dbg_req,
+    input                               dbg_wren,
+    input       [31:0]                  dbg_addr,
+    input       [31:0]                  dbg_wdata,
+    output      [31:0]                  dbg_rdata,
+    output                              dbg_rack,
 
     output                              dlb_en,
     output                              dlb_we,
@@ -95,9 +108,11 @@ module merc32_core #(
     localparam  TRIG_HIGH               = 2'b10;
     localparam  TRIG_LOW                = 2'b11;
 
+    wire                                run_rst_n;
     reg     [4:0]                       cpu_state;
     reg     [15:0]                      prog_addr;
     reg     [15:0]                      prog_next;
+    reg     [15:0]                      ret_addr;
 
     reg                                 alu_vld;
     reg     [3:0]                       alu_ptr;
@@ -113,7 +128,6 @@ module merc32_core #(
     wire    [1:0]                       trig_mode;
     wire                                trig_hit;
     wire    [15:0]                      intr_addr;
-    wire    [15:0]                      ret_addr;
 
     reg                                 intr_ff0;
     reg                                 intr_ff1;
@@ -140,13 +154,25 @@ module merc32_core #(
     wire    [31:0]                      lb_rdata;
     wire                                lb_rack;
 
+    wire                                bus_req;
+    wire                                bus_wren;
+    wire    [31:0]                      bus_addr;
+    wire    [31:0]                      bus_wdata;
+    wire    [31:0]                      bus_rdata;
+    wire                                bus_done;
+
+    wire                                inst_addr_hit;
     wire                                data_addr_hit;
     wire                                peri_addr_hit;
     wire                                miss_addr_hit;
     wire                                peri_done;
 
+    reg                                 inst_pending;
     reg                                 data_pending;
     reg                                 miss_pending;
+    reg                                 bus_pending_dbg;
+
+    assign  run_rst_n = rst_n & cpu_rst_n;
 
     assign  imm = ilb_rdata[31:16];
     assign  rs1 = ilb_rdata[19:16];
@@ -155,38 +181,49 @@ module merc32_core #(
     assign  opc = ilb_rdata[7:4];
     assign  fun = ilb_rdata[3:0];
     
-    assign  ilb_en    = cpu_state == ST_LOAD;
-    assign  ilb_we    = 1'b0;
-    assign  ilb_addr  = prog_addr;
-    assign  ilb_wdata = 32'h0;
+    assign  bus_req   = dbg_req | lb_req;
+    assign  bus_wren  = dbg_req ? dbg_wren : lb_wren;
+    assign  bus_addr  = dbg_req ? dbg_addr : lb_addr;
+    assign  bus_wdata = dbg_req ? dbg_wdata : lb_wdata;
+
+    assign  inst_addr_hit = dbg_req && (bus_addr < (32'd1 << (ILB_ADDR_WIDTH + 2)));
+    assign  data_addr_hit = (bus_addr >= 32'h0010_0000) && (bus_addr < (32'h0010_0000 + (32'd1 << (DLB_ADDR_WIDTH + 2))));
+    assign  peri_addr_hit = bus_addr >= 32'h1000_0000;
+    assign  miss_addr_hit = ~inst_addr_hit & ~data_addr_hit & ~peri_addr_hit;
+    assign  peri_done     = plb_valid | plb_wrack;
+    assign  bus_done      = inst_pending | data_pending | miss_pending | peri_done;
+    assign  bus_rdata     = inst_pending ? ilb_rdata : data_pending ? dlb_rdata : plb_valid ? plb_rdata : 32'hdece;
+
+    assign  ilb_en    = dbg_req ? (bus_req & inst_addr_hit) : (cpu_state == ST_LOAD);
+    assign  ilb_we    = dbg_req & bus_req & inst_addr_hit & bus_wren;
+    assign  ilb_addr  = dbg_req ? bus_addr[ILB_ADDR_WIDTH+1:2] : prog_addr;
+    assign  ilb_wdata = dbg_req ? bus_wdata : 32'h0;
 
     assign  prog_exec = cpu_state == ST_EXEC;
     assign  inst_mwr  = ({opc, fun} == {OP_IMM, FUNC_MWR} || {opc, fun} == {OP_REG, FUNC_MWR});
     assign  inst_mrd  = ({opc, fun} == {OP_IMM, FUNC_MRD} || {opc, fun} == {OP_REG, FUNC_MRD});
     assign  prog_step = (inst_mwr || inst_mrd) ? lb_rack : cpu_state == ST_STEP;
 
-    assign  data_addr_hit = (lb_addr >= 32'h0010_0000) && (lb_addr < (32'h0010_0000 + (32'd1 << (DLB_ADDR_WIDTH + 2))));
-    assign  peri_addr_hit = lb_addr >= 32'h1000_0000;
-    assign  miss_addr_hit = ~data_addr_hit & ~peri_addr_hit;
-    assign  peri_done     = plb_valid | plb_wrack;
+    assign  dlb_en        = bus_req & data_addr_hit;
+    assign  dlb_we        = bus_req & data_addr_hit & bus_wren;
+    assign  dlb_addr      = bus_addr[DLB_ADDR_WIDTH+1:2];
+    assign  dlb_wdata     = bus_wdata;
 
-    assign  dlb_en        = lb_req & data_addr_hit;
-    assign  dlb_we        = lb_req & data_addr_hit & lb_wren;
-    assign  dlb_addr      = lb_addr[DLB_ADDR_WIDTH+1:2];
-    assign  dlb_wdata     = lb_wdata;
+    assign  plb_rden      = bus_req & peri_addr_hit & ~bus_wren;
+    assign  plb_wren      = bus_req & peri_addr_hit & bus_wren;
+    assign  plb_addr      = bus_addr;
+    assign  plb_wdata     = bus_wdata;
 
-    assign  plb_rden      = lb_req & peri_addr_hit & ~lb_wren;
-    assign  plb_wren      = lb_req & peri_addr_hit & lb_wren;
-    assign  plb_addr      = lb_addr;
-    assign  plb_wdata     = lb_wdata;
-
-    assign  lb_rack       = data_pending | miss_pending | peri_done;
-    assign  lb_rdata      = data_pending ? dlb_rdata : plb_valid ? plb_rdata : 32'hdece;
+    assign  lb_rack       = bus_done & ~bus_pending_dbg;
+    assign  lb_rdata      = bus_rdata;
+    assign  dbg_rack      = bus_done & bus_pending_dbg;
+    assign  dbg_rdata     = bus_rdata;
+    assign  dbg_halted    = (cpu_state == ST_IDLE) & dbg_halt_req;
+    assign  dbg_pc        = prog_addr;
 
     assign  trig_en   = regi_int[1][0];
     assign  trig_mode = regi_int[1][2:1];
     assign  intr_addr = regi_int[2][31:16];
-    assign  ret_addr  = regi_int[2][15:0];
     assign  trig_hit  = 
         (trig_mode == TRIG_RISE) ?  intr_ff1 & ~intr_ff2 :
         (trig_mode == TRIG_FALL) ? ~intr_ff1 &  intr_ff2 :
@@ -194,14 +231,14 @@ module merc32_core #(
         (trig_mode == TRIG_LOW)  ? ~intr_ff2 : 1'b0;
 
     always @(posedge clk) begin
-        if(!rst_n) begin
+        if(!run_rst_n) begin
             cpu_state <= ST_IDLE;
         end else begin
             case(cpu_state)
-                ST_IDLE:cpu_state <= ST_LOAD;
+                ST_IDLE:cpu_state <= (dbg_halt_req & ~dbg_step_req) ? ST_IDLE : ST_LOAD;
                 ST_LOAD:cpu_state <= ST_EXEC;
                 ST_EXEC:cpu_state <= ST_STEP;
-                ST_STEP:cpu_state <= prog_step ? (intr_flag ? ST_INTR : ST_LOAD) : ST_STEP;
+                ST_STEP:cpu_state <= prog_step ? (dbg_halt_req ? ST_IDLE : (intr_flag ? ST_INTR : ST_LOAD)) : ST_STEP;
                 ST_INTR:cpu_state <= ST_LOAD;
                 default:cpu_state <= ST_IDLE;
             endcase
@@ -209,15 +246,17 @@ module merc32_core #(
     end
 
     always @(posedge clk) begin
-        if(!rst_n) begin
+        if(!run_rst_n) begin
             prog_addr <= 0;
+            ret_addr <= 0;
         end else if(prog_step) begin
             prog_addr <= intr_flag ? intr_addr : prog_next;
+            ret_addr <= intr_flag ? prog_next : ret_addr;
         end
     end
 
     always @(posedge clk) begin
-        if(!rst_n) begin
+        if(!run_rst_n) begin
             prog_next <= 0;
         end else if(prog_exec) begin
             case({opc, fun})
@@ -259,11 +298,12 @@ module merc32_core #(
     end
 
     always @(posedge clk) begin : main
-        if(!rst_n) begin
+        if(!run_rst_n) begin
             alu_vld <= 1'b0;
             alu_ptr <= 4'd0;
             alu_data <= 32'h0;
         end else begin
+            alu_vld <= 1'b0;
             alu_ptr <= rd;
             case({opc, fun})
                 {OP_IMM, FUNC_SET}:begin
@@ -359,7 +399,7 @@ module merc32_core #(
     end
 
     always @(posedge clk) begin
-        if(!rst_n) begin
+        if(!run_rst_n) begin
             ugt <= 0;
             uge <= 0;
             sgt <= 0;
@@ -387,7 +427,7 @@ module merc32_core #(
 
     always @(posedge clk) begin:register_files
         integer i;
-        if(!rst_n) begin
+        if(!run_rst_n) begin
             for (i = 0;i < 16;i = i + 1) begin
                 regi_int[i] <= 0;
             end
@@ -395,7 +435,7 @@ module merc32_core #(
             case (alu_ptr)
                 4'h0:regi_int[00] <= regi_int[00];
                 4'h1:regi_int[01] <= alu_data;
-                4'h2:regi_int[02] <= {alu_data[31:16],prog_next};
+                4'h2:regi_int[02] <= {alu_data[31:16],regi_int[02][15:0]};
                 4'h3:regi_int[03] <= alu_data;
                 4'h4:regi_int[04] <= alu_data;
                 4'h5:regi_int[05] <= alu_data;
@@ -412,12 +452,13 @@ module merc32_core #(
             endcase
         end else begin
             regi_int[00] <= 32'h0;
+            regi_int[02] <= {regi_int[02][31:16],ret_addr};
             regi_int[15] <= {uge, ugt, sge, sgt, eq, 11'b0, prog_addr};
         end
     end
 
     always @(posedge clk) begin
-        if (!rst_n) begin
+        if (!run_rst_n) begin
             intr_ff0 <= 1'b0;
             intr_ff1 <= 1'b0;
             intr_ff2 <= 1'b0;
@@ -431,7 +472,7 @@ module merc32_core #(
     end
 
     always @(posedge clk) begin
-        if(!rst_n) begin
+        if(!run_rst_n) begin
             lb_req <= 1'b0;
             lb_wren <= 1'b0;
             lb_addr <= 32'h0;
@@ -449,11 +490,20 @@ module merc32_core #(
 
     always @(posedge clk) begin
         if(!rst_n) begin
+            inst_pending <= 1'b0;
             data_pending <= 1'b0;
             miss_pending <= 1'b0;
+            bus_pending_dbg <= 1'b0;
         end else begin
-            data_pending <= lb_req & data_addr_hit;
-            miss_pending <= lb_req & miss_addr_hit;
+            inst_pending <= bus_req & inst_addr_hit;
+            data_pending <= bus_req & data_addr_hit;
+            miss_pending <= bus_req & miss_addr_hit;
+
+            if (bus_done) begin
+                bus_pending_dbg <= 1'b0;
+            end else if (bus_req) begin
+                bus_pending_dbg <= dbg_req;
+            end
         end
     end
 

@@ -73,7 +73,20 @@ module merc32_full_tb();
     merc32_core cpu_inst (
         .clk            (clk),
         .rst_n          (rst_n),
+        .cpu_rst_n      (1'b1),
         .interrupt      (interrupt),
+
+        .dbg_halt_req   (1'b0),
+        .dbg_step_req   (1'b0),
+        .dbg_halted     (),
+        .dbg_pc         (),
+
+        .dbg_req        (1'b0),
+        .dbg_wren       (1'b0),
+        .dbg_addr       (32'h0),
+        .dbg_wdata      (32'h0),
+        .dbg_rdata      (),
+        .dbg_rack       (),
 
         .dlb_en         (dlb_en),
         .dlb_we         (dlb_we),
