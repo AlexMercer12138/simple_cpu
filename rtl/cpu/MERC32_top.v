@@ -1,18 +1,16 @@
-`timescale 1ns / 1ps
 //================================================================================
-//  MERC32
+//
+//  ███╗   ███╗███████╗██████╗  ██████╗███████╗██████╗ 
+//  ████╗ ████║██╔════╝██╔══██╗██╔════╝██╔════╝██╔══██╗
+//  ██╔████╔██║█████╗  ██████╔╝██║     █████╗  ██████╔╝
+//  ██║╚██╔╝██║██╔══╝  ██╔══██╗██║     ██╔══╝  ██╔══██╗
+//  ██║ ╚═╝ ██║███████╗██║  ██║╚██████╗███████╗██║  ██║
+//  ╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚═╝  ╚═╝
 //
 //--------------------------------------------------------------------------------
 //  Author      : Mercer
 //  Module      : MERC32_top
-//  Description : MERC32 CPU top-level wrapper with selectable bus interface.
-//                Six interfaces are mutually exclusive. Selection priority
-//                (high to low) when multiple macros are defined:
-//                  IF_AXI_LITE > IF_APB > IF_WBC > IF_AVALON > IF_DRP > IF_LB
-//                All ports are fixed to 32-bit; external logic should truncate
-//                as needed.
-//  Wechat      : zxw895674551
-//  Email       : alexmercer@outlook.com
+//  Description : MERC32 CPU top-level wrapper with selectable bus interface
 //--------------------------------------------------------------------------------
 //  Copyright (c) 2026 Mercer. All rights reserved.
 //  Licensed under the MIT License.
@@ -20,6 +18,26 @@
 //  Version History:
 //  v1.0 - Initial release
 //================================================================================
+
+//================================================================================
+//  Instantiation Template
+//================================================================================
+/*
+MERC32_top #(
+    .ILB_ADDR_WIDTH             (16             ),
+    .DLB_ADDR_WIDTH             (16             ),
+    .ILB_INIT_FILE              (""             ),
+    .DLB_INIT_FILE              (""             ))
+u_MERC32_top (
+    .clk                        (clk            ),
+    .rst_n                      (rst_n          ),
+    .interrupt                  (interrupt      ));
+*/
+
+//================================================================================
+//  Module Definition
+//================================================================================
+
 // `define IF_AXI_LITE
 `define IF_APB
 // `define IF_WBC
@@ -30,7 +48,9 @@ module MERC32_top #(
     // ILB/DLB address widths are word-address widths. The maximum supported
     // value is 16 because the MERC32 PC and local address fields are 16 bits.
     parameter   ILB_ADDR_WIDTH          = 16,
-    parameter   DLB_ADDR_WIDTH          = 16
+    parameter   DLB_ADDR_WIDTH          = 16,
+    parameter   ILB_INIT_FILE           = "",
+    parameter   DLB_INIT_FILE           = ""
 ) (
     input                               clk,
     input                               rst_n,
@@ -176,7 +196,8 @@ module MERC32_top #(
     //----------------------------------------------------------------------------
     spram #(
         .DATA_WIDTH                     (32             ),
-        .ADDR_WIDTH                     (ILB_ADDR_WIDTH ))
+        .ADDR_WIDTH                     (ILB_ADDR_WIDTH ),
+        .INIT_FILE                      (ILB_INIT_FILE  ))
     u_ilb_ram (
         .clk                            (clk            ),
         .en                             (ilb_en         ),
@@ -188,7 +209,8 @@ module MERC32_top #(
 
     spram #(
         .DATA_WIDTH                     (32             ),
-        .ADDR_WIDTH                     (DLB_ADDR_WIDTH ))
+        .ADDR_WIDTH                     (DLB_ADDR_WIDTH ),
+        .INIT_FILE                      (DLB_INIT_FILE  ))
     u_dlb_ram (
         .clk                            (clk            ),
         .en                             (dlb_en         ),

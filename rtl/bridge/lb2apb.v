@@ -11,14 +11,14 @@
 //  Author      : Mercer
 //  Module      : lb2apb
 //  Description : Local bus to APB bridge adapter
-//  Wechat      : zxw895674551
-//  Email       : alexmercer@outlook.com
 //--------------------------------------------------------------------------------
 //  Copyright (c) 2026 Mercer. All rights reserved.
 //  Licensed under the MIT License.
 //--------------------------------------------------------------------------------
 //  Version History:
 //  v1.0 - Initial release
+//================================================================================
+
 //================================================================================
 //  Instantiation Template
 //================================================================================
@@ -38,7 +38,7 @@ u_lb2apb (
     .lb_addr                    (lb_addr        ),
     .lb_rdata                   (lb_rdata       ),
     .lb_valid                   (lb_valid       ),
-    .lb_wack                    (lb_wack        ),
+    .lb_wrack                   (lb_wrack       ),
 
     .m_apb_psel                 (m_apb_psel     ),
     .m_apb_penable              (m_apb_penable  ),

@@ -53,7 +53,7 @@ code --install-extension merc32-asm-2.0.0.vsix
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
-| `merc32-asm.outputFormat` | 输出格式：verilog / coe / mif / hex / bin | `verilog` |
+| `merc32-asm.outputFormat` | 输出格式：verilog / coe / mif / hex / bin / mem | `verilog` |
 | `merc32-asm.outputPath` | 自定义输出目录（空则同源文件目录） | `""` |
 
 ### 支持的指令语法
@@ -276,6 +276,13 @@ END
 :0400000000000010EC
 :0400040000010110E6
 :00000001FF
+```
+
+### MEM 格式（Verilog `$readmemh`）
+
+```
+00000010
+00010110
 ```
 
 ## 技术规格

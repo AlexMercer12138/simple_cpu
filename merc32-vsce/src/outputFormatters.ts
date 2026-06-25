@@ -6,6 +6,7 @@ export const OUTPUT_EXTENSIONS: Record<OutputFormat, string> = {
     mif: '.mif',
     hex: '.hex',
     bin: '.bin',
+    mem: '.mem',
 };
 
 export function formatAssemblyOutput(codes: number[], format: OutputFormat, moduleName: string): string | Buffer {
@@ -20,6 +21,8 @@ export function formatAssemblyOutput(codes: number[], format: OutputFormat, modu
             return formatIntelHex(codes);
         case 'bin':
             return formatBinBytes(codes);
+        case 'mem':
+            return formatReadmemh(codes);
     }
 }
 
@@ -102,6 +105,10 @@ function formatIntelHex(codes: number[]): string {
     }
     lines.push(':00000001FF');
     return lines.join('\n');
+}
+
+function formatReadmemh(codes: number[]): string {
+    return codes.map(toWordHex).join('\n');
 }
 
 function formatBinBytes(codes: number[]): Buffer {

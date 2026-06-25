@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 //================================================================================
 //
 //  ███╗   ███╗███████╗██████╗  ██████╗███████╗██████╗ 
@@ -10,18 +9,64 @@
 //
 //--------------------------------------------------------------------------------
 //  Author      : Mercer
-//  Module      : MERC32
-//  Description : Lightweight 32-bit RISC CPU Core
-//  Wechat      : zxw895674551
-//  Email       : alexmercer@outlook.com
+//  Module      : merc32_core
+//  Description : Lightweight 32-bit RISC CPU core
 //--------------------------------------------------------------------------------
-//  Copyright (c) 2025 Mercer. All rights reserved.
+//  Copyright (c) 2026 Mercer. All rights reserved.
 //  Licensed under the MIT License.
 //--------------------------------------------------------------------------------
 //  Version History:
 //  v1.0 - Initial release
 //================================================================================
 
+//================================================================================
+//  Instantiation Template
+//================================================================================
+/*
+merc32_core #(
+    .ILB_ADDR_WIDTH             (16             ),
+    .DLB_ADDR_WIDTH             (16             ))
+u_merc32_core (
+    .clk                        (clk            ),
+    .rst_n                      (rst_n          ),
+    .cpu_rst_n                  (cpu_rst_n      ),
+    .interrupt                  (interrupt      ),
+
+    .dbg_halt_req               (dbg_halt_req   ),
+    .dbg_step_req               (dbg_step_req   ),
+    .dbg_halted                 (dbg_halted     ),
+    .dbg_pc                     (dbg_pc         ),
+    .dbg_req                    (dbg_req        ),
+    .dbg_wren                   (dbg_wren       ),
+    .dbg_addr                   (dbg_addr       ),
+    .dbg_wdata                  (dbg_wdata      ),
+    .dbg_rdata                  (dbg_rdata      ),
+    .dbg_rack                   (dbg_rack       ),
+
+    .dlb_en                     (dlb_en         ),
+    .dlb_we                     (dlb_we         ),
+    .dlb_addr                   (dlb_addr       ),
+    .dlb_wdata                  (dlb_wdata      ),
+    .dlb_rdata                  (dlb_rdata      ),
+
+    .ilb_en                     (ilb_en         ),
+    .ilb_we                     (ilb_we         ),
+    .ilb_addr                   (ilb_addr       ),
+    .ilb_wdata                  (ilb_wdata      ),
+    .ilb_rdata                  (ilb_rdata      ),
+
+    .plb_rden                   (plb_rden       ),
+    .plb_wren                   (plb_wren       ),
+    .plb_addr                   (plb_addr       ),
+    .plb_wdata                  (plb_wdata      ),
+    .plb_wrack                  (plb_wrack      ),
+    .plb_rdata                  (plb_rdata      ),
+    .plb_valid                  (plb_valid      ));
+*/
+
+//================================================================================
+//  Module Definition
+//================================================================================
 
 module merc32_core #(
     // ILB/DLB address widths are word-address widths. The maximum supported

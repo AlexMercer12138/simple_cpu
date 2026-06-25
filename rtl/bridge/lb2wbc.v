@@ -9,10 +9,8 @@
 //
 //--------------------------------------------------------------------------------
 //  Author      : Mercer
-//  Module      : lb2wishbone
+//  Module      : lb2wbc
 //  Description : Local bus to Wishbone B4 classic bridge adapter
-//  Wechat      : zxw895674551
-//  Email       : alexmercer@outlook.com
 //--------------------------------------------------------------------------------
 //  Copyright (c) 2026 Mercer. All rights reserved.
 //  Licensed under the MIT License.
@@ -20,15 +18,17 @@
 //  Version History:
 //  v1.0 - Initial release
 //================================================================================
+
+//================================================================================
 //  Instantiation Template
 //================================================================================
 /*
-lb2wishbone #(
+lb2wbc #(
     .LB_DATA_WIDTH              (32             ),
     .LB_ADDR_WIDTH              (32             ),
     .WB_DATA_WIDTH              (32             ),
     .WB_ADDR_WIDTH              (8              ))
-u_lb2wishbone (
+u_lb2wbc (
     .clk                        (clk            ),
     .rst_n                      (rst_n          ),
 
@@ -38,7 +38,7 @@ u_lb2wishbone (
     .lb_addr                    (lb_addr        ),
     .lb_rdata                   (lb_rdata       ),
     .lb_valid                   (lb_valid       ),
-    .lb_wack                    (lb_wack        ),
+    .lb_wrack                   (lb_wrack       ),
 
     .m_wb_cyc_o                 (m_wb_cyc_o     ),
     .m_wb_stb_o                 (m_wb_stb_o     ),
@@ -53,6 +53,7 @@ u_lb2wishbone (
 //================================================================================
 //  Module Definition
 //================================================================================
+
 module lb2wbc #(
     parameter LB_DATA_WIDTH             = 32,
     parameter LB_ADDR_WIDTH             = 32,
@@ -82,7 +83,7 @@ module lb2wbc #(
 
     localparam MIN_DATA_WIDTH = LB_DATA_WIDTH > WB_DATA_WIDTH ? WB_DATA_WIDTH : LB_DATA_WIDTH;
     localparam MIN_ADDR_WIDTH = LB_ADDR_WIDTH > WB_ADDR_WIDTH ? WB_ADDR_WIDTH : LB_ADDR_WIDTH;
-    localparam ADDR_LSB = (AXI_DATA_WIDTH / 32) + 1;
+    localparam ADDR_LSB = (WB_DATA_WIDTH / 32) + 1;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -109,8 +110,8 @@ module lb2wbc #(
             lb_wrack <= 1'b0;
         end else begin
             lb_rdata <= m_wb_dat_i[MIN_DATA_WIDTH-1:0];
-            lb_valid <= m_wb_cyc_o & m_wb_stb_o & m_wb_ack_i & ~m_wb_sel_o;
-            lb_wrack <= m_wb_cyc_o & m_wb_stb_o & m_wb_ack_i & m_wb_sel_o;
+            lb_valid <= m_wb_cyc_o & m_wb_stb_o & m_wb_ack_i & ~m_wb_we_o;
+            lb_wrack <= m_wb_cyc_o & m_wb_stb_o & m_wb_ack_i & m_wb_we_o;
         end
     end
 

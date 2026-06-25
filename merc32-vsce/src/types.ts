@@ -1,6 +1,6 @@
 import type { Buffer } from 'buffer';
 
-export const OUTPUT_FORMATS = ['verilog', 'coe', 'mif', 'hex', 'bin'] as const;
+export const OUTPUT_FORMATS = ['verilog', 'coe', 'mif', 'hex', 'bin', 'mem'] as const;
 export type OutputFormat = typeof OUTPUT_FORMATS[number];
 export const DEFAULT_OUTPUT_FORMAT: OutputFormat = 'verilog';
 

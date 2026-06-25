@@ -11,8 +11,6 @@
 //  Author      : Mercer
 //  Module      : lb2axi_lite
 //  Description : Local bus to AXI-Lite bridge adapter
-//  Wechat      : zxw895674551
-//  Email       : alexmercer@outlook.com
 //--------------------------------------------------------------------------------
 //  Copyright (c) 2026 Mercer. All rights reserved.
 //  Licensed under the MIT License.
@@ -20,43 +18,45 @@
 //  Version History:
 //  v1.0 - Initial release
 //================================================================================
+
+//================================================================================
 //  Instantiation Template
 //================================================================================
 /*
 lb2axi_lite #(
-    .LB_DATA_WIDTH                      (32             ),
-    .LB_ADDR_WIDTH                      (32             ),
-    .AXI_DATA_WIDTH                     (32             ),
-    .AXI_ADDR_WIDTH                     (8              ))
+    .LB_DATA_WIDTH              (32             ),
+    .LB_ADDR_WIDTH              (32             ),
+    .AXI_DATA_WIDTH             (32             ),
+    .AXI_ADDR_WIDTH             (8              ))
 u_lb2axi_lite (
-    .clk                                (clk            ),
-    .rst_n                              (rst_n          ),
+    .clk                        (clk            ),
+    .rst_n                      (rst_n          ),
 
-    .lb_rden                            (lb_rden        ),
-    .lb_wren                            (lb_wren        ),
-    .lb_wdata                           (lb_wdata       ),
-    .lb_addr                            (lb_addr        ),
-    .lb_rdata                           (lb_rdata       ),
-    .lb_valid                           (lb_valid       ),
-    .lb_wack                            (lb_wack        ),
+    .lb_rden                    (lb_rden        ),
+    .lb_wren                    (lb_wren        ),
+    .lb_wdata                   (lb_wdata       ),
+    .lb_addr                    (lb_addr        ),
+    .lb_rdata                   (lb_rdata       ),
+    .lb_valid                   (lb_valid       ),
+    .lb_wrack                   (lb_wrack       ),
 
-    .m_axi_awvalid                      (m_axi_awvalid  ),
-    .m_axi_awready                      (m_axi_awready  ),
-    .m_axi_awaddr                       (m_axi_awaddr   ),
-    .m_axi_wvalid                       (m_axi_wvalid   ),
-    .m_axi_wready                       (m_axi_wready   ),
-    .m_axi_wdata                        (m_axi_wdata    ),
-    .m_axi_wstrb                        (m_axi_wstrb    ),
-    .m_axi_bvalid                       (m_axi_bvalid   ),
-    .m_axi_bready                       (m_axi_bready   ),
-    .m_axi_bresp                        (m_axi_bresp    ),
-    .m_axi_arvalid                      (m_axi_arvalid  ),
-    .m_axi_arready                      (m_axi_arready  ),
-    .m_axi_araddr                       (m_axi_araddr   ),
-    .m_axi_rvalid                       (m_axi_rvalid   ),
-    .m_axi_rready                       (m_axi_rready   ),
-    .m_axi_rdata                        (m_axi_rdata    ),
-    .m_axi_rresp                        (m_axi_rresp    ));
+    .m_axi_awvalid              (m_axi_awvalid  ),
+    .m_axi_awready              (m_axi_awready  ),
+    .m_axi_awaddr               (m_axi_awaddr   ),
+    .m_axi_wvalid               (m_axi_wvalid   ),
+    .m_axi_wready               (m_axi_wready   ),
+    .m_axi_wdata                (m_axi_wdata    ),
+    .m_axi_wstrb                (m_axi_wstrb    ),
+    .m_axi_bvalid               (m_axi_bvalid   ),
+    .m_axi_bready               (m_axi_bready   ),
+    .m_axi_bresp                (m_axi_bresp    ),
+    .m_axi_arvalid              (m_axi_arvalid  ),
+    .m_axi_arready              (m_axi_arready  ),
+    .m_axi_araddr               (m_axi_araddr   ),
+    .m_axi_rvalid               (m_axi_rvalid   ),
+    .m_axi_rready               (m_axi_rready   ),
+    .m_axi_rdata                (m_axi_rdata    ),
+    .m_axi_rresp                (m_axi_rresp    ));
 */
 
 //================================================================================

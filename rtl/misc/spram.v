@@ -11,8 +11,6 @@
 //  Author      : Mercer
 //  Module      : spram
 //  Description : Single-port RAM module
-//  Wechat      : zxw895674551
-//  Email       : alexmercer@outlook.com
 //--------------------------------------------------------------------------------
 //  Copyright (c) 2026 Mercer. All rights reserved.
 //  Licensed under the MIT License.
@@ -20,19 +18,22 @@
 //  Version History:
 //  v1.0 - Initial release
 //================================================================================
+
+//================================================================================
 //  Instantiation Template
 //================================================================================
 /*
 spram #(
     .DATA_WIDTH                 (32             ),
-    .ADDR_WIDTH                 (32             ))
+    .ADDR_WIDTH                 (32             ),
+    .INIT_FILE                  (""             ))
 u_spram (
-    .clk                       (clk            ),
-    .en                        (en             ),
-    .we                        (we             ),
-    .din                       (din            ),
-    .dout                      (dout           ),
-    .addr                      (addr           ));
+    .clk                        (clk            ),
+    .en                         (en             ),
+    .we                         (we             ),
+    .din                        (din            ),
+    .dout                       (dout           ),
+    .addr                       (addr           ));
 */
 
 //================================================================================
@@ -41,7 +42,8 @@ u_spram (
 
 module spram #(
     parameter   DATA_WIDTH          = 32,
-    parameter   ADDR_WIDTH          = 32
+    parameter   ADDR_WIDTH          = 32,
+    parameter   INIT_FILE           = ""
 ) (
     input                           clk,
     input                           en,
@@ -51,7 +53,7 @@ module spram #(
     input       [ADDR_WIDTH-1:0]    addr
 );
 
-    reg     [DATA_WIDTH-1:0]        ram [(1<<ADDR_WIDTH)-1:0];
+    reg     [DATA_WIDTH-1:0]        ram [0:(1<<ADDR_WIDTH)-1];
 
     always @(posedge clk) begin
         if (en & we)
@@ -63,7 +65,11 @@ module spram #(
     initial begin : initialization
         integer i;
         for (i = 0; i < (1<<ADDR_WIDTH); i = i + 1) begin
-            ram[i] = 0;
+            ram[i] = {DATA_WIDTH{1'b0}};
+        end
+
+        if (INIT_FILE != "") begin
+            $readmemh(INIT_FILE, ram, 0, (1<<ADDR_WIDTH)-1);
         end
     end
 

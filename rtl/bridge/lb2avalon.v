@@ -11,14 +11,14 @@
 //  Author      : Mercer
 //  Module      : lb2avalon
 //  Description : Local bus to Avalon-MM bridge adapter
-//  Wechat      : zxw895674551
-//  Email       : alexmercer@outlook.com
 //--------------------------------------------------------------------------------
 //  Copyright (c) 2026 Mercer. All rights reserved.
 //  Licensed under the MIT License.
 //--------------------------------------------------------------------------------
 //  Version History:
 //  v1.0 - Initial release
+//================================================================================
+
 //================================================================================
 //  Instantiation Template
 //================================================================================
@@ -53,6 +53,7 @@ u_lb2avalon (
 //================================================================================
 //  Module Definition
 //================================================================================
+
 module lb2avalon #(
     parameter LB_DATA_WIDTH             = 32,
     parameter LB_ADDR_WIDTH             = 32,
@@ -82,7 +83,7 @@ module lb2avalon #(
 
     localparam MIN_DATA_WIDTH = LB_DATA_WIDTH > AV_DATA_WIDTH ? AV_DATA_WIDTH : LB_DATA_WIDTH;
     localparam MIN_ADDR_WIDTH = LB_ADDR_WIDTH > AV_ADDR_WIDTH ? AV_ADDR_WIDTH : LB_ADDR_WIDTH;
-    localparam ADDR_LSB = (AXI_DATA_WIDTH / 32) + 1;
+    localparam ADDR_LSB = (AV_DATA_WIDTH / 32) + 1;
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin

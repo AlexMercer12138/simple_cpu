@@ -177,6 +177,10 @@ const serviceResult = assembleFile(fs.readFileSync(main, 'utf8'), main, 'verilog
 assert.strictEqual(path.basename(serviceResult.outputFile), 'demo_prog.v')
 assert.match(fs.readFileSync(serviceResult.outputFile, 'utf8'), /module demo_prog\(/)
 
+const memResult = assembleFile(fs.readFileSync(main, 'utf8'), main, 'mem', 'file')
+assert.strictEqual(path.basename(memResult.outputFile), 'demo_prog.mem')
+assert.strictEqual(fs.readFileSync(memResult.outputFile, 'utf8'), '00010110')
+
 const inc1 = path.join(tmp, 'inc1.asm')
 const inc2 = path.join(tmp, 'inc2.asm')
 const inactive = path.join(tmp, 'inactive.asm')

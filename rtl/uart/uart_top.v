@@ -11,8 +11,6 @@
 //  Author      : Mercer
 //  Module      : uart_top
 //  Description : UART top module with TX/RX and FIFO
-//  Wechat      : zxw895674551
-//  Email       : alexmercer@outlook.com
 //--------------------------------------------------------------------------------
 //  Copyright (c) 2026 Mercer. All rights reserved.
 //  Licensed under the MIT License.

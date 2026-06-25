@@ -145,14 +145,16 @@
             "coe",
             "mif",
             "hex",
-            "bin"
+            "bin",
+            "mem"
           ],
           "enumDescriptions": [
             "Verilog module (.v)",
             "Xilinx COE file (.coe)",
             "Altera MIF file (.mif)",
             "Intel HEX file (.hex)",
-            "Binary file (.bin)"
+            "Binary file (.bin)",
+            "$readmemh memory file (.mem)"
           ],
           "description": "Default output format for the assembler"
         },

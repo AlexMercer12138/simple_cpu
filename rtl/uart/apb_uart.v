@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 //================================================================================
 //
 //  ███╗   ███╗███████╗██████╗  ██████╗███████╗██████╗ 
@@ -11,9 +10,7 @@
 //--------------------------------------------------------------------------------
 //  Author      : Mercer
 //  Module      : apb_uart
-//  Description : APB uart controller
-//  Wechat      : zxw895674551
-//  Email       : alexmercer@outlook.com
+//  Description : APB UART controller
 //--------------------------------------------------------------------------------
 //  Copyright (c) 2026 Mercer. All rights reserved.
 //  Licensed under the MIT License.
@@ -21,14 +18,14 @@
 //  Version History:
 //  v1.0 - Initial release
 //================================================================================
+
+//================================================================================
 //  Instantiation Template
 //================================================================================
 /*
 apb_uart #(
     .SYS_CLK_FREQ               (50_000_000     ),
-    .BAUD_RATE                  (115200         ),
-    .STOP_BIT_CNT               (1              ),
-    .PARITY_TYPE                ("none"         ))
+    .FIFO_DEPTH                 (8              ))
 u_apb_uart (
     .s_apb_pclk                 (s_apb_pclk     ),
     .s_apb_presetn              (s_apb_presetn  ),
@@ -42,6 +39,7 @@ u_apb_uart (
     .s_apb_pready               (s_apb_pready   ),
     .s_apb_pslverr              (s_apb_pslverr  ),
     .s_apb_prdata               (s_apb_prdata   ),
+    .interrupt                  (interrupt      ),
 
     .uart_rx                    (uart_rx        ),
     .uart_tx                    (uart_tx        ));
