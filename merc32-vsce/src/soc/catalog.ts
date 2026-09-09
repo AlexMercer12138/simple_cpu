@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { parseRtlInterface } from './rtlInterface';
 
 import {
     CatalogParameter,
@@ -94,12 +95,22 @@ export function getProtocol(catalog: ModuleCatalog, type: string): ProtocolDescr
 function parseModule(value: unknown, assetRoot: string): ModuleDescriptor {
     const source = asObject(value, 'module descriptor');
     rejectUnknownFields(source, MODULE_FIELDS, 'module descriptor');
-    const parameters = parseParameters(source.parameters);
-    const ports = parsePorts(source.ports, parameters);
+    const moduleName = asIdentifier(source.module, 'module name');
+    const rtlFiles = parseRtlFiles(source.rtlFiles, assetRoot);
+    const rtl = parseRtlInterface(rtlFiles.map(file =>
+        fs.readFileSync(resolveAssetPath(assetRoot, file), 'utf8')).join('\n'), moduleName);
+    const metadata = asObject(source.parameters ?? {}, 'parameters');
+    const merged: JsonObject = {};
+    for (const [name, parameter] of Object.entries(rtl.parameters)) {
+        merged[name] = { ...parameter, ...(metadata[name] === undefined ? {} : asObject(metadata[name], name)),
+            default: parameter.default };
+    }
+    const parameters = parseParameters(merged);
+    const ports = parsePorts(source.ports, parameters, rtl.ports);
     const descriptor: ModuleDescriptor = {
         type: asIdentifier(source.type, 'module type'),
-        module: asIdentifier(source.module, 'module name'),
-        rtlFiles: parseRtlFiles(source.rtlFiles, assetRoot),
+        module: moduleName,
+        rtlFiles,
         multiple: asBoolean(source.multiple, 'multiple'),
         addressSize: asPositiveInteger(source.addressSize, 'addressSize'),
         alignment: asPositiveInteger(source.alignment, 'alignment'),
@@ -215,7 +226,11 @@ function validateParameterValue(
     }
 }
 
-function parsePorts(value: unknown, parameters: Readonly<Record<string, CatalogParameter>>): readonly CatalogPort[] {
+function parsePorts(
+    value: unknown,
+    parameters: Readonly<Record<string, CatalogParameter>>,
+    rtlPorts?: ReadonlyMap<string, CatalogPort>,
+): readonly CatalogPort[] {
     if (!Array.isArray(value)) {
         throw new Error('ports must be an array');
     }
@@ -228,6 +243,11 @@ function parsePorts(value: unknown, parameters: Readonly<Record<string, CatalogP
             throw new Error(`Duplicate port name: ${name}`);
         }
         names.add(name);
+        if (rtlPorts) {
+            const declared = rtlPorts.get(name);
+            if (!declared) throw new Error(`Missing RTL port ${name}`);
+            return Object.freeze(declared);
+        }
         const direction = asString(source.direction, `port ${name}.direction`);
         if (!DIRECTIONS.has(direction)) {
             throw new Error(`Invalid port direction for ${name}: ${direction}`);

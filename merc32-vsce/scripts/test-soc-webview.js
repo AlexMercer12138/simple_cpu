@@ -890,6 +890,32 @@ function runFixedUnitFieldTests() {
     highBody.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
     assert.strictEqual(posted.length, 0);
 
+    const incomplete = createVisualModel();
+    incomplete.selectedPath = ['externalInterfaces', 0];
+    incomplete.config.externalInterfaces[0].windowSize = 'invalid';
+    incomplete.externalInterfacePresentation = [{ index: 0, name: 'sensor_bus' }];
+    harness.deliver({ type: 'state', value: incomplete });
+    const editableHigh = document.querySelector('.external-high-address input');
+    assert.strictEqual(editableHigh.disabled, false);
+    assert.strictEqual(document.querySelector('.external-window-size').textContent, '—');
+    posted.length = 0;
+    editableHigh.value = '2001ffff';
+    editableHigh.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    assert.deepStrictEqual(posted.at(-1), {
+        type: 'setValue', documentVersion: 42,
+        path: ['externalInterfaces', 0, 'highAddress'], value: '0x2001ffff',
+    });
+    incomplete.externalInterfacePresentation[0].windowSize = 131072;
+    incomplete.config.externalInterfaces[0].highAddress = '0x2001ffff';
+    harness.deliver({ type: 'state', value: incomplete });
+    assert.strictEqual(document.querySelector('.external-window-size').textContent, '131072');
+    posted.length = 0;
+    document.querySelector('[aria-label="Clear High address"]').click();
+    assert.deepStrictEqual(posted.at(-1), {
+        type: 'unsetValue', documentVersion: 42,
+        path: ['externalInterfaces', 0, 'highAddress'],
+    });
+
     harness.dom.window.close();
 }
 

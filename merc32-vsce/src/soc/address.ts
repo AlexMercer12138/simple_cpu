@@ -1,4 +1,4 @@
-import { ModuleCatalog, SocDiagnostic, SocSourceConfig } from './model';
+import { ExternalInterfaceSource, ModuleCatalog, SocDiagnostic, SocSourceConfig } from './model';
 import { validateSocConfig } from './validate';
 
 const MAX_U32 = 0xffffffffn;
@@ -8,6 +8,25 @@ const KIBIBYTE = 1024n;
 const MEBIBYTE = KIBIBYTE * KIBIBYTE;
 
 type JsonUnsignedInteger = number | string;
+
+/** Explicit bounds are authoritative; old base + size configurations remain readable. */
+export function externalWindowSize(endpoint: ExternalInterfaceSource): bigint {
+    if (endpoint.highAddress !== undefined) {
+        if (endpoint.baseAddress === undefined) throw new Error('Set a base address to calculate the window size.');
+        const base = parseU32(endpoint.baseAddress);
+        const high = parseU32(endpoint.highAddress);
+        if (high < base) throw new Error('High address must be greater than or equal to base address.');
+        return high - base + 1n;
+    }
+    if (endpoint.windowSize === undefined) throw new Error('Set a high address to define the address window.');
+    return parseByteSize(endpoint.windowSize);
+}
+
+export function externalHighAddress(endpoint: ExternalInterfaceSource): string | undefined {
+    if (endpoint.highAddress !== undefined) return endpoint.highAddress;
+    if (endpoint.baseAddress === undefined || endpoint.windowSize === undefined) return undefined;
+    return formatHex32(rangeEnd(parseU32(endpoint.baseAddress), parseByteSize(endpoint.windowSize)));
+}
 
 function parseUnsignedInteger(value: JsonUnsignedInteger, description: string): bigint {
     if (typeof value === 'number') {
@@ -182,7 +201,7 @@ export function assignMissingAddresses(
             ? 1n << BigInt(endpoint.addressWidth)
             : BigInt(protocol.alignment);
         const path: readonly (string | number)[] = ['externalInterfaces', index, 'baseAddress'];
-        if (!allocate(parseByteSize(endpoint.windowSize), alignment, path,
+        if (!allocate(externalWindowSize(endpoint), alignment, path,
             (address) => { endpoint.baseAddress = address; })) {
             return allocationFailure(originalClone, existingDiagnostics, path);
         }
@@ -210,7 +229,7 @@ function collectExplicitRanges(config: SocSourceConfig, catalog: ModuleCatalog):
             continue;
         }
         const base = BigInt(endpoint.baseAddress);
-        const size = parseByteSize(endpoint.windowSize);
+        const size = externalWindowSize(endpoint);
         ranges.push({ base, end: base + size - 1n });
     }
     return ranges;

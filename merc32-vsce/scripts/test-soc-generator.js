@@ -90,7 +90,7 @@ function prepareGenerationAssets(root, resourceRevision = 'test-resource-revisio
             .flatMap((descriptor) => descriptor.rtlFiles),
     ]) {
         writeFile(path.join(root, ...logicalPath.split('/')),
-            `opaque ${logicalPath}\n`);
+            fs.readFileSync(path.join(repositoryRoot, logicalPath), 'utf8'));
     }
     writeFile(path.join(root, 'licenses', 'LICENSE'), 'opaque generator license\n');
     writeFile(path.join(root, 'resource-manifest.json'), `${JSON.stringify({

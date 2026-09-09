@@ -28,6 +28,10 @@
                 "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
                 "type": "string"
               },
+              "highAddress": {
+                "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
+                "type": "string"
+              },
               "name": {
                 "type": "string"
               },
@@ -42,11 +46,9 @@
               "windowSize": {
                 "oneOf": [
                   {
-                    "minimum": 1,
-                    "type": "integer"
+                    "type": "number"
                   },
                   {
-                    "pattern": "^[0-9]+(?:[Kk][Ii][Bb]|[Mm][Ii][Bb])?$",
                     "type": "string"
                   }
                 ]
@@ -55,7 +57,6 @@
             "required": [
               "type",
               "name",
-              "windowSize",
               "addressWidth"
             ],
             "type": "object"
@@ -67,6 +68,10 @@
                 "type": "integer"
               },
               "baseAddress": {
+                "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
+                "type": "string"
+              },
+              "highAddress": {
                 "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
                 "type": "string"
               },
@@ -84,11 +89,9 @@
               "windowSize": {
                 "oneOf": [
                   {
-                    "minimum": 1,
-                    "type": "integer"
+                    "type": "number"
                   },
                   {
-                    "pattern": "^[0-9]+(?:[Kk][Ii][Bb]|[Mm][Ii][Bb])?$",
                     "type": "string"
                   }
                 ]
@@ -97,7 +100,6 @@
             "required": [
               "type",
               "name",
-              "windowSize",
               "addressWidth"
             ],
             "type": "object"
@@ -109,6 +111,10 @@
                 "type": "integer"
               },
               "baseAddress": {
+                "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
+                "type": "string"
+              },
+              "highAddress": {
                 "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
                 "type": "string"
               },
@@ -126,11 +132,9 @@
               "windowSize": {
                 "oneOf": [
                   {
-                    "minimum": 1,
-                    "type": "integer"
+                    "type": "number"
                   },
                   {
-                    "pattern": "^[0-9]+(?:[Kk][Ii][Bb]|[Mm][Ii][Bb])?$",
                     "type": "string"
                   }
                 ]
@@ -139,7 +143,6 @@
             "required": [
               "type",
               "name",
-              "windowSize",
               "addressWidth"
             ],
             "type": "object"
@@ -151,6 +154,10 @@
                 "type": "integer"
               },
               "baseAddress": {
+                "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
+                "type": "string"
+              },
+              "highAddress": {
                 "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
                 "type": "string"
               },
@@ -168,11 +175,9 @@
               "windowSize": {
                 "oneOf": [
                   {
-                    "minimum": 1,
-                    "type": "integer"
+                    "type": "number"
                   },
                   {
-                    "pattern": "^[0-9]+(?:[Kk][Ii][Bb]|[Mm][Ii][Bb])?$",
                     "type": "string"
                   }
                 ]
@@ -181,7 +186,6 @@
             "required": [
               "type",
               "name",
-              "windowSize",
               "addressWidth"
             ],
             "type": "object"
@@ -193,6 +197,10 @@
                 "type": "integer"
               },
               "baseAddress": {
+                "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
+                "type": "string"
+              },
+              "highAddress": {
                 "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
                 "type": "string"
               },
@@ -210,11 +218,9 @@
               "windowSize": {
                 "oneOf": [
                   {
-                    "minimum": 1,
-                    "type": "integer"
+                    "type": "number"
                   },
                   {
-                    "pattern": "^[0-9]+(?:[Kk][Ii][Bb]|[Mm][Ii][Bb])?$",
                     "type": "string"
                   }
                 ]
@@ -223,7 +229,6 @@
             "required": [
               "type",
               "name",
-              "windowSize",
               "addressWidth"
             ],
             "type": "object"
@@ -235,6 +240,10 @@
                 "type": "integer"
               },
               "baseAddress": {
+                "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
+                "type": "string"
+              },
+              "highAddress": {
                 "pattern": "^0[xX][0-9a-fA-F]{1,8}$",
                 "type": "string"
               },
@@ -252,11 +261,9 @@
               "windowSize": {
                 "oneOf": [
                   {
-                    "minimum": 1,
-                    "type": "integer"
+                    "type": "number"
                   },
                   {
-                    "pattern": "^[0-9]+(?:[Kk][Ii][Bb]|[Mm][Ii][Bb])?$",
                     "type": "string"
                   }
                 ]
@@ -265,7 +272,6 @@
             "required": [
               "type",
               "name",
-              "windowSize",
               "addressWidth"
             ],
             "type": "object"
@@ -529,7 +535,13 @@
               },
               "parameters": {
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "GPIO_WIDTH": {
+                    "maximum": 32,
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
                 "type": "object"
               },
               "type": {
@@ -661,6 +673,12 @@
               "parameters": {
                 "additionalProperties": false,
                 "properties": {
+                  "BUS_WIDTH": {
+                    "enum": [
+                      4,
+                      8
+                    ]
+                  },
                   "FIFO_DEPTH": {
                     "maximum": 512,
                     "minimum": 8,

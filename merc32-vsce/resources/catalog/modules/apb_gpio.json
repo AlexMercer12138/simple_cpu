@@ -5,7 +5,9 @@
   "multiple": true,
   "addressSize": 4096,
   "alignment": 4096,
-  "parameters": {},
+  "parameters": {
+    "GPIO_WIDTH": { "type": "integer", "minimum": 1, "maximum": 32 }
+  },
   "ports": [
     { "name": "gpio_i", "direction": "input", "width": 32 },
     { "name": "gpio_o", "direction": "output", "width": 32 },

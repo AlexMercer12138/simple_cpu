@@ -675,14 +675,17 @@ assert.ok(multiView.config);
 const parsedMultiForEditing = parseSocConfig(multiText, multiFixture, catalog);
 assert.ok(parsedMultiForEditing.config);
 assert.deepStrictEqual(multiView.externalInterfacePresentation, [
-    { index: 0, name: 'apb_ext0', highAddress: '0x10004fff' },
-    { index: 1, name: 'axi0', highAddress: '0x20ffffff' },
+    { index: 0, name: 'apb_ext0', highAddress: '0x10004fff', windowSize: 4096 },
+    { index: 1, name: 'axi0', highAddress: '0x20ffffff', windowSize: 16777216 },
 ]);
 assert.deepStrictEqual(buildSocDocumentUpdates(parsedMultiForEditing.config, catalog, {
     type: 'setValue', documentVersion: 12,
     path: ['externalInterfaces', 0, 'highAddress'], value: '0x10005fff',
-}), [{ path: ['externalInterfaces', 0, 'windowSize'], value: 8192 }]);
-for (const invalidHighAddress of ['0x10003fff', '0x10004ff', '0x100000000']) {
+}), [
+    { path: ['externalInterfaces', 0, 'highAddress'], value: '0x10005fff' },
+    { path: ['externalInterfaces', 0, 'windowSize'], value: 8192 },
+]);
+for (const invalidHighAddress of ['0x100000000', 'invalid']) {
     assert.strictEqual(buildSocDocumentUpdates(parsedMultiForEditing.config, catalog, {
         type: 'setValue', documentVersion: 12,
         path: ['externalInterfaces', 0, 'highAddress'], value: invalidHighAddress,
@@ -698,7 +701,7 @@ const derivedRangeSource = applyReplacement(multiText, buildJsonReplacement(
 const derivedRangeConfig = JSON.parse(derivedRangeSource);
 assert.strictEqual(derivedRangeConfig.externalInterfaces[0].windowSize, 8192);
 assert.strictEqual(Object.prototype.hasOwnProperty.call(
-    derivedRangeConfig.externalInterfaces[0], 'highAddress'), false);
+    derivedRangeConfig.externalInterfaces[0], 'highAddress'), true);
 assert.ok(!multiView.catalog.modules.some((item) => item.type === 'apb_intc'));
 assert.deepStrictEqual(multiView.interruptController, {
     peripheralIndex: 3,
@@ -767,7 +770,11 @@ for (const optionalPath of [
         `rejected optional field deletion: ${JSON.stringify(optionalPath)}`);
     assert.deepStrictEqual(buildSocDocumentUpdates(parsedMultiForEditing.config, catalog, {
         type: 'unsetValue', documentVersion: 12, path: optionalPath,
-    }), [{ path: optionalPath, value: undefined }]);
+    }), optionalPath[0] === 'externalInterfaces' ? [
+        { path: optionalPath, value: undefined },
+        { path: ['externalInterfaces', 0, 'highAddress'], value: '0x10004fff' },
+        { path: ['externalInterfaces', 0, 'windowSize'], value: undefined },
+    ] : [{ path: optionalPath, value: undefined }]);
 }
 for (const requiredPath of [
     ['project', 'name'],

@@ -299,10 +299,14 @@
         const presentation = model.externalInterfacePresentation
             .find((item) => item.index === index);
         addHexField('High address', ['externalInterfaces', index, 'highAddress'],
-            presentation && presentation.highAddress || '', {
-                className: 'external-high-address',
-                disabled: !presentation || !presentation.highAddress,
+            endpoint.highAddress || presentation && presentation.highAddress || '', {
+                className: 'external-high-address', optional: true,
         });
+        const sizeRow = element('div', 'field-row');
+        sizeRow.append(element('span', 'field-label', 'Window size (bytes)'),
+            element('output', 'field-detail external-window-size',
+                presentation && presentation.windowSize !== undefined ? String(presentation.windowSize) : '—'));
+        propertyForm.appendChild(sizeRow);
         addField('Address width', ['externalInterfaces', index, 'addressWidth'], endpoint.addressWidth, {
             kind: 'number', minimum: 1, maximum: 32,
         });

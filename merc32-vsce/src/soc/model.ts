@@ -23,7 +23,9 @@ export interface ExternalInterfaceSource {
     type: 'local_bus' | 'apb' | 'axi4_lite' | 'wishbone' | 'avalon' | 'drp';
     name: string;
     baseAddress?: string;
-    windowSize: number | string;
+    highAddress?: string;
+    /** Legacy size, or a derived cache when both addresses are explicit. */
+    windowSize?: number | string;
     addressWidth: number;
     parameters?: Record<string, number | string | boolean>;
 }

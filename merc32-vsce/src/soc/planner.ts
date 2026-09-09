@@ -1,6 +1,6 @@
 import * as path from 'path';
 
-import { parseByteSize, rangeEnd } from './address';
+import { externalWindowSize, parseByteSize, rangeEnd } from './address';
 import {
     CatalogPort,
     ControllerInterruptSource,
@@ -235,7 +235,7 @@ function planExternalInterfaces(
             ? { [descriptor.addressWidthParameter]: source.addressWidth }
             : {};
         const baseAddress = BigInt(source.baseAddress!);
-        const sizeBytes = parseByteSize(source.windowSize);
+        const sizeBytes = externalWindowSize(source);
         return {
             kind: 'external',
             name: source.name,

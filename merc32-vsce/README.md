@@ -1,6 +1,6 @@
 # MERC32 Toolchain for VSCode
 
-[![Version](https://img.shields.io/badge/Version-2.3.0-blue.svg)](https://github.com/AlexMercer12138/MERC32)
+[![Version](https://img.shields.io/badge/Version-2.4.0-blue.svg)](https://github.com/AlexMercer12138/MERC32)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 MERC32 CPU 的统一 VSCode 扩展，集成可视化 SoC 配置、外设驱动生成、C17 编译器与汇编器。从配置硬件、编写裸机程序到生成 ROM 文件，均可在编辑器中完成。
@@ -69,6 +69,10 @@ PowerShell 使用 `merc32.ps1` 保留宏参数中的引号和百分号，例如 
 2. 打开 `*.merc32.json`，配置存储器、外设和中断；也可通过 **Reopen as Text** 编辑 JSON。
 3. 按需执行 **Auto-assign Addresses**，然后执行 **Validate** 和 **Generate**。
 4. 将生成的 `hardware/<project>.v` 加入 FPGA 或仿真工程，从 `software/main.c` 开始编写应用。
+
+外设参数列表、默认值及相关引脚位宽从扩展包内的 RTL 读取；更新 RTL 并重新打包后即可生效。JSON 中显式填写的参数值会保留，清空参数可恢复 RTL 默认值。
+
+外部接口的 **Base address** 和 **High address** 分别配置，两个字段均可清空；修改基地址不会移动结束地址。**Window size (bytes)** 只读显示 `highAddress - baseAddress + 1`。旧版仅含 `baseAddress + windowSize` 的 JSON 仍可使用；编辑地址时会保存 `highAddress` 并更新计算出的 `windowSize`。地址未填完整或范围非法时会显示诊断，两个地址仍可编辑。
 
 选择 **Controller** 中断模式后，配置器自动管理中断控制器及路由。主要生成文件如下：
 
@@ -146,3 +150,5 @@ npm run test:vsix
 ```
 
 安装包输出为 `merc32-vsce.vsix`。更新 IP 驱动后，可先执行 `npm run sync:drivers -- ../../ip-repo` 同步资源。
+
+外设 catalog 仅维护模块选择、引脚导出和参数约束；参数名与默认值取自包内 RTL。当前解析支持仓库使用的 ANSI 模块头、非负整数常量（含进制、位宽和下划线）、字符串常量，以及固定或 `[PARAMETER-1:0]` 端口位宽；不支持的表达式会明确报错，不会静默回退到旧参数。

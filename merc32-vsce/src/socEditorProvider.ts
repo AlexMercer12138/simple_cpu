@@ -14,13 +14,13 @@ import type {
 import { JsonValueUpdate, buildJsonReplacement } from './socJsonEdits';
 import {
     formatHex32,
+    externalHighAddress,
+    externalWindowSize,
     loadCatalog,
     ModuleCatalog,
-    parseByteSize,
     parseSocConfig,
     parseU32,
     planSoc,
-    rangeEnd,
     SocDiagnostic,
     SocSourceConfig,
 } from './soc';
@@ -294,7 +294,7 @@ export function isEditableSocPath(
     if (pathValue[0] === 'externalInterfaces' && typeof pathValue[1] === 'number') {
         if (!config.externalInterfaces[pathValue[1]]) return false;
         return pathValue.length === 3 && typeof pathValue[2] === 'string'
-            && new Set(['type', 'name', 'baseAddress', 'windowSize', 'addressWidth']).has(pathValue[2]);
+            && new Set(['type', 'name', 'baseAddress', 'highAddress', 'addressWidth']).has(pathValue[2]);
     }
     if (pathValue[0] === 'interrupt' && pathValue.length === 2) {
         const allowed = config.interrupt.mode === 'none'
@@ -330,7 +330,7 @@ export function isUnsettableSocPath(
             || pathValue.length === 4 && pathValue[2] === 'parameters';
     }
     return pathValue.length === 3 && pathValue[0] === 'externalInterfaces'
-        && typeof pathValue[1] === 'number' && pathValue[2] === 'baseAddress';
+        && typeof pathValue[1] === 'number' && (pathValue[2] === 'baseAddress' || pathValue[2] === 'highAddress');
 }
 
 /** Applies all structured updates through one native workspace replacement. */
@@ -465,10 +465,16 @@ export function buildSocDocumentUpdates(
 ): readonly JsonValueUpdate[] | undefined {
     if (message.type === 'unsetValue') {
         return isUnsettableSocPath(config, catalog, message.path)
-            ? [{ path: message.path, value: undefined }]
+            ? externalAddressUpdates(config, message.path, undefined) ?? [{ path: message.path, value: undefined }]
             : undefined;
     }
     if (message.type === 'setValue') {
+        if (isEditableSocPath(config, catalog, message.path)) {
+            if (message.path[0] === 'externalInterfaces'
+                && (message.path[2] === 'baseAddress' || message.path[2] === 'highAddress')) {
+                return externalAddressUpdates(config, message.path, message.value);
+            }
+        }
         const derived = derivedEditorUpdates(config, message.path, message.value);
         if (derived !== undefined) return derived;
         if (!isEditableSocPath(config, catalog, message.path)) return undefined;
@@ -512,30 +518,38 @@ function normalizeDependentUpdates(
     return updates;
 }
 
+function externalAddressUpdates(
+    config: SocSourceConfig,
+    pathValue: SocJsonPath,
+    value: JsonValue | undefined,
+): readonly JsonValueUpdate[] | undefined {
+    if (pathValue.length !== 3 || pathValue[0] !== 'externalInterfaces'
+        || typeof pathValue[1] !== 'number'
+        || (pathValue[2] !== 'baseAddress' && pathValue[2] !== 'highAddress')) return undefined;
+    const previous = config.externalInterfaces[pathValue[1]];
+    if (!previous || (value !== undefined && (typeof value !== 'string' || !/^0[xX][0-9a-fA-F]{1,8}$/.test(value)))) {
+        return undefined;
+    }
+    let highAddress = previous.highAddress;
+    try { highAddress = externalHighAddress(previous); } catch { /* Repair malformed legacy windows. */ }
+    const next = { ...previous, highAddress, [pathValue[2]]: value };
+    const updates: JsonValueUpdate[] = [{ path: pathValue, value }];
+    if (pathValue[2] === 'baseAddress' && highAddress !== previous.highAddress) {
+        updates.push({ path: ['externalInterfaces', pathValue[1], 'highAddress'], value: highAddress });
+    }
+    let windowSize: number | undefined;
+    if (next.baseAddress !== undefined && next.highAddress !== undefined) {
+        try { windowSize = Number(externalWindowSize(next)); } catch { /* An invalid range remains editable. */ }
+    }
+    updates.push({ path: ['externalInterfaces', pathValue[1], 'windowSize'], value: windowSize });
+    return updates;
+}
+
 function derivedEditorUpdates(
     config: SocSourceConfig,
     pathValue: SocJsonPath,
     value: JsonValue,
 ): readonly JsonValueUpdate[] | undefined {
-    if (pathValue.length === 3 && pathValue[0] === 'externalInterfaces'
-        && typeof pathValue[1] === 'number' && pathValue[2] === 'highAddress') {
-        const endpoint = config.externalInterfaces[pathValue[1]];
-        if (!endpoint || endpoint.baseAddress === undefined || typeof value !== 'string'
-            || !/^0x[0-9a-fA-F]{8}$/.test(value)) {
-            return undefined;
-        }
-        try {
-            const baseAddress = parseU32(endpoint.baseAddress);
-            const highAddress = parseU32(value);
-            if (highAddress < baseAddress) return undefined;
-            return [{
-                path: ['externalInterfaces', pathValue[1], 'windowSize'],
-                value: Number(highAddress - baseAddress + 1n),
-            }];
-        } catch {
-            return undefined;
-        }
-    }
     if (pathValue.length === 2 && pathValue[0] === 'interrupt'
         && pathValue[1] === 'controllerName') {
         if (config.interrupt.mode !== 'controller' || typeof value !== 'string') return undefined;
@@ -687,21 +701,17 @@ function presentExternalInterfaces(
     config: SocSourceConfig,
 ): SocEditorViewModel['externalInterfacePresentation'] {
     return config.externalInterfaces.map((endpoint, index) => {
-        let highAddress: string | undefined;
+        let highAddress = endpoint.highAddress;
+        let windowSize: number | undefined;
         try {
-            if (endpoint.baseAddress !== undefined) {
-                highAddress = formatHex32(rangeEnd(
-                    parseU32(endpoint.baseAddress),
-                    parseByteSize(endpoint.windowSize),
-                ));
-            }
-        } catch {
-            highAddress = undefined;
-        }
+            highAddress = externalHighAddress(endpoint);
+            if (endpoint.baseAddress !== undefined) windowSize = Number(externalWindowSize(endpoint));
+        } catch { /* Keep both address controls available while the range is incomplete. */ }
         return {
             index,
             name: endpoint.name,
             ...(highAddress === undefined ? {} : { highAddress }),
+            ...(windowSize === undefined ? {} : { windowSize }),
         };
     });
 }

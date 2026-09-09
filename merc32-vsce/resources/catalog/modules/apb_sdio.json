@@ -6,7 +6,8 @@
   "addressSize": 4096,
   "alignment": 4096,
   "parameters": {
-    "FIFO_DEPTH": { "type": "powerOfTwo", "minimum": 8, "maximum": 512, "default": 128 }
+    "BUS_WIDTH": { "type": "enum", "values": [4, 8] },
+    "FIFO_DEPTH": { "type": "powerOfTwo", "minimum": 8, "maximum": 512 }
   },
   "ports": [
     { "name": "sd_clk_o", "direction": "output", "width": 1 },

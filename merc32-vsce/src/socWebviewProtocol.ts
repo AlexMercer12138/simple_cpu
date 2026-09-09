@@ -50,6 +50,7 @@ export interface SocExternalInterfacePresentation {
     index: number;
     name: string;
     highAddress?: string;
+    windowSize?: number;
 }
 
 export interface SocInterruptControllerPresentation {

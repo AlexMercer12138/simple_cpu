@@ -1,6 +1,6 @@
 import * as pathModule from 'path';
 
-import { parseByteSize } from './address';
+import { externalWindowSize, parseByteSize } from './address';
 import {
     CatalogParameter,
     ModuleCatalog,
@@ -227,11 +227,14 @@ export function validateSocConfig(
                 'External addressWidth must be an integer from 1 through 32.');
         }
         let windowSize: bigint | undefined;
+        const rangeField = endpoint.highAddress !== undefined || endpoint.windowSize === undefined
+            ? (endpoint.highAddress !== undefined && endpoint.baseAddress === undefined ? 'baseAddress' : 'highAddress')
+            : 'windowSize';
         try {
-            windowSize = parseByteSize(endpoint.windowSize);
-        } catch {
-            add('SOC_ADDRESS_RANGE', [...rootPath, 'windowSize'],
-                'External windowSize must be a positive byte size.');
+            windowSize = externalWindowSize(endpoint);
+        } catch (error) {
+            add('SOC_ADDRESS_RANGE', [...rootPath, rangeField],
+                (error as Error).message);
         }
         if (widthValid && windowSize !== undefined
             && windowSize > (1n << BigInt(endpoint.addressWidth))) {
@@ -253,7 +256,7 @@ export function validateSocConfig(
                 windowSize,
                 alignment,
                 [...rootPath, 'baseAddress'],
-                [...rootPath, 'windowSize'],
+                [...rootPath, rangeField],
                 ranges,
                 add,
             );

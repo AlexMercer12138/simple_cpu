@@ -22,7 +22,7 @@ for (const logicalPath of [
 ]) {
     const file = path.join(catalogAssetRoot, ...logicalPath.split('/'));
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, 'opaque test asset\n');
+    fs.copyFileSync(path.resolve(__dirname, '../..', logicalPath), file);
 }
 fs.cpSync(catalogResources, path.join(catalogAssetRoot, 'catalog'), { recursive: true });
 const catalog = loadCatalog(catalogAssetRoot);
@@ -57,11 +57,12 @@ assert.deepStrictEqual(Object.fromEntries(catalog.modules), {
     },
     apb_gpio: {
         type: 'apb_gpio', module: 'apb_gpio', rtlFiles: ['rtl/apb_gpio/apb_gpio.v'],
-        multiple: true, addressSize: 4096, alignment: 4096, parameters: {},
+        multiple: true, addressSize: 4096, alignment: 4096,
+        parameters: { GPIO_WIDTH: { type: 'integer', minimum: 1, maximum: 32, default: 32 } },
         ports: [
-            { name: 'gpio_i', direction: 'input', width: 32 },
-            { name: 'gpio_o', direction: 'output', width: 32 },
-            { name: 'gpio_t', direction: 'output', width: 32 },
+            { name: 'gpio_i', direction: 'input', width: { parameter: 'GPIO_WIDTH' } },
+            { name: 'gpio_o', direction: 'output', width: { parameter: 'GPIO_WIDTH' } },
+            { name: 'gpio_t', direction: 'output', width: { parameter: 'GPIO_WIDTH' } },
         ],
         interrupts: ['interrupt'],
     },
@@ -121,15 +122,16 @@ assert.deepStrictEqual(Object.fromEntries(catalog.modules), {
         multiple: true, addressSize: 4096, alignment: 4096,
         parameters: {
             FIFO_DEPTH: { type: 'powerOfTwo', minimum: 8, maximum: 512, default: 128 },
+            BUS_WIDTH: { type: 'enum', values: [4, 8], default: 8 },
         },
         ports: [
             { name: 'sd_clk_o', direction: 'output', width: 1 },
             { name: 'sd_cmd_i', direction: 'input', width: 1 },
             { name: 'sd_cmd_o', direction: 'output', width: 1 },
             { name: 'sd_cmd_t', direction: 'output', width: 1 },
-            { name: 'sd_dat_i', direction: 'input', width: 8 },
-            { name: 'sd_dat_o', direction: 'output', width: 8 },
-            { name: 'sd_dat_t', direction: 'output', width: 8 },
+            { name: 'sd_dat_i', direction: 'input', width: { parameter: 'BUS_WIDTH' } },
+            { name: 'sd_dat_o', direction: 'output', width: { parameter: 'BUS_WIDTH' } },
+            { name: 'sd_dat_t', direction: 'output', width: { parameter: 'BUS_WIDTH' } },
             { name: 'dma_tx_rd_en', direction: 'output', width: 1 },
             { name: 'dma_tx_dout', direction: 'input', width: 32 },
             { name: 'dma_tx_empty', direction: 'input', width: 1 },
@@ -289,7 +291,8 @@ function withCatalogAssets(moduleDescriptors, protocols, test) {
         const modulesDirectory = path.join(temporaryRoot, 'catalog', 'modules');
         fs.mkdirSync(modulesDirectory, { recursive: true });
         fs.mkdirSync(path.join(temporaryRoot, 'rtl'), { recursive: true });
-        fs.writeFileSync(path.join(temporaryRoot, 'rtl', 'fixture.v'), 'module fixture; endmodule\n');
+        fs.writeFileSync(path.join(temporaryRoot, 'rtl', 'fixture.v'),
+            'module fixture_module #(parameter DEPTH = 8)(output wire [DEPTH-1:0] data); endmodule\n');
         for (const [fileName, descriptor] of Object.entries(moduleDescriptors)) {
             fs.writeFileSync(path.join(modulesDirectory, fileName), JSON.stringify(descriptor));
         }
@@ -325,12 +328,16 @@ withCatalogAssets({ 'fixture.json': {
     ...validModule,
     parameters: { DEPTH: { type: 'powerOfTwo', minimum: 2, default: 6 } },
 } }, validProtocols,
-    (root) => assert.throws(() => loadCatalog(root), /default.*power of two/i));
+    (root) => {
+        fs.writeFileSync(path.join(root, 'rtl/fixture.v'),
+            'module fixture_module #(parameter DEPTH = 6)(output wire [DEPTH-1:0] data); endmodule\n');
+        assert.throws(() => loadCatalog(root), /default.*power of two/i);
+    });
 withCatalogAssets({ 'fixture.json': {
     ...validModule,
-    ports: [{ name: 'data', direction: 'output', width: { parameter: 'UNKNOWN' } }],
+    ports: [{ name: 'missing_port', direction: 'output', width: 1 }],
 } }, validProtocols,
-    (root) => assert.throws(() => loadCatalog(root), /unknown parameter.*UNKNOWN/i));
+    (root) => assert.throws(() => loadCatalog(root), /missing RTL port.*missing_port/i));
 withCatalogAssets({ 'fixture.json': { ...validModule, unexpected: true } }, validProtocols,
     (root) => assert.throws(() => loadCatalog(root), /unknown field.*unexpected/i));
 withCatalogAssets({ 'fixture.json': validModule }, [{ ...validProtocols[0], unexpected: true }],

@@ -62,11 +62,13 @@ function externalInterfaceSchema(descriptor: ProtocolDescriptor): JsonSchema {
     return closedObject({
         addressWidth: { type: 'integer' },
         baseAddress: addressSchema,
+        highAddress: addressSchema,
         name: { type: 'string' },
         parameters: closedObject({}),
         type: { const: descriptor.type },
-        windowSize: byteSizeSchema,
-    }, ['type', 'name', 'windowSize', 'addressWidth']);
+        // Semantic validation keeps malformed legacy sizes repairable in the editor.
+        windowSize: { oneOf: [{ type: 'number' }, { type: 'string' }] },
+    }, ['type', 'name', 'addressWidth']);
 }
 
 function memorySchema(type: 'internal_ram' | 'external_local_bus'): JsonSchema {
