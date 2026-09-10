@@ -166,6 +166,19 @@ async function run() {
             '#include "sibling.h"\n#include <stdint.h>\nint smoke_value = MERC32_SMOKE_VALUE + (int)UINT32_MAX;\nint main(void) { return smoke_value; }\n');
         const cDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(cMain));
         await vscode.window.showTextDocument(cDocument, { preview: false });
+        const toolchainConfig = vscode.workspace.getConfiguration('merc32-asm');
+        await toolchainConfig.update('outputFormat', 'mi', vscode.ConfigurationTarget.Workspace);
+        await toolchainConfig.update('mi.fileFormat', 'Bin', vscode.ConfigurationTarget.Workspace);
+        await toolchainConfig.update('mi.addressDepth', 4096, vscode.ConfigurationTarget.Workspace);
+        await vscode.commands.executeCommand('merc32-asm.buildCToRom');
+        const miLines = fs.readFileSync(path.join(cSmokeRoot, 'main.mi'), 'utf8').trimEnd().split('\n');
+        assert.deepStrictEqual(miLines.slice(0, 3), ['#File_format=Bin', '#Address_depth=4096', '#Data_width=32']);
+        assert.strictEqual(miLines.length, 4099);
+        assert.ok(miLines.slice(3).every(line => /^[01]{32}$/.test(line)));
+        assert.strictEqual(fs.existsSync(path.join(cSmokeRoot, 'main.asm')), false,
+            'public C build emitted intermediate assembly');
+        assert.strictEqual(fs.existsSync(path.join(cSmokeRoot, 'main_replaced.asm')), false);
+        // Legacy assembly remains callable internally for existing integrations.
         await vscode.commands.executeCommand('merc32-asm.compileCToAsm');
         requireExactFile(path.join(cSmokeRoot, 'main.asm'),
             'offline C frontend smoke assembly');

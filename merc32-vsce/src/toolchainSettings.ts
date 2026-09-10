@@ -1,9 +1,10 @@
 import * as path from 'path';
-import { DEFAULT_OUTPUT_FORMAT, OutputFormat } from './types';
+import { DEFAULT_OUTPUT_FORMAT, MiOutputOptions, OutputFormat } from './types';
 
 export interface AssemblerSettings {
     outputFormat: OutputFormat;
     outputDir: string;
+    miOptions?: MiOutputOptions;
     cKeepAssembly: boolean;
     cDataBase: number;
     cDlbAddrWidth: number;

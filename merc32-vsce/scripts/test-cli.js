@@ -51,13 +51,26 @@ const compiled = compileCFile(source, {
 });
 assert.equal(fs.readFileSync(asmFile, 'utf8'), compiled.assembly);
 const assembled = new SimpleCPUAssembler().assemble(compiled.assembly, { sourceFileName: asmFile });
-for (const format of ['verilog', 'coe', 'mif', 'hex', 'bin', 'mem']) {
+for (const format of ['verilog', 'coe', 'mif', 'hex', 'bin', 'mem', 'mi']) {
     const output = `output ${format}`;
     const result = run(['build', source, ...common, '--format', format, '--out-dir', output]);
     const file = path.join(scratch, output, `main_space${OUTPUT_EXTENSIONS[format]}`);
     assert.deepEqual(fs.readFileSync(file), Buffer.from(formatAssemblyOutput(assembled.machineCodes, format, 'main_space')));
     assert.ok(result.stdout.includes(file));
 }
+run(['build', source, ...common, '--format', 'mi', '--mi-file-format', 'Bin',
+    '--mi-depth', '4096', '--mi-width', '32', '--out-dir', 'mi configured', '--no-keep-assembly']);
+const miLines = fs.readFileSync(path.join(scratch, 'mi configured', 'main_space.mi'), 'utf8').trimEnd().split('\n');
+assert.deepEqual(miLines.slice(0, 3), ['#File_format=Bin', '#Address_depth=4096', '#Data_width=32']);
+assert.equal(miLines.length, 4099);
+assert.ok(miLines.slice(3).every(line => /^[01]{32}$/.test(line)));
+assert.deepEqual(miLines.slice(3, 3 + assembled.machineCodes.length).map(line => parseInt(line, 2)),
+    assembled.machineCodes.map(word => word >>> 0));
+assert.ok(miLines.slice(3 + assembled.machineCodes.length).every(line => /^0+$/.test(line)));
+run(['build', source, ...common, '--format', 'mi', '--mi-depth', '1'], 1);
+run(['assemble', asmFile, '--format', 'mi', '--mi-file-format', 'Hex', '--out-dir', 'mi assembled']);
+assert.deepEqual(fs.readFileSync(path.join(scratch, 'mi assembled', 'main_space.mi')),
+    fs.readFileSync(path.join(scratch, 'output mi', 'main_space.mi')));
 run(['assemble', asmFile, '--format', 'bin', '--out-dir', 'assembled']);
 assert.deepEqual(fs.readFileSync(path.join(scratch, 'assembled', 'main_space.bin')),
     fs.readFileSync(path.join(scratch, 'output bin', 'main_space.bin')));
@@ -81,7 +94,11 @@ for (const args of [[], ['wat'], ['build'], ['build', source, '--wat'],
     ['build', source, '--format', 'elf'], ['build', source, '--code-base', '0x100oops'],
     ['build', source, '--dlb-addr-width', '0'], ['build', source, '--out-dir'],
     ['build', source, 'extra.c'], ['assemble', source], ['compile', asmFile],
-    ['compile', source, '--emit', 'elf'], ['build', source, '-D1BAD=1']]) {
+    ['compile', source, '--emit', 'elf'], ['build', source, '-D1BAD=1'],
+    ['build', source, '--format', 'mi', '--mi-file-format', 'Oct'],
+    ['build', source, '--format', 'mi', '--mi-width', '33'],
+    ['build', source, '--format', 'mi', '--mi-depth', '1.5'],
+    ['build', source, '--mi-depth', '256'], ['compile', source, '--format', 'mi', '--mi-depth', '256']]) {
     run(args, 2);
 }
 for (const options of [['--code-base', '1'], ['--data-base', '0'],

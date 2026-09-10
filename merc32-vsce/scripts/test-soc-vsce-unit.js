@@ -1299,7 +1299,7 @@ try {
     });
 
     const compilerArtifactUri = uri('build/existing.hex');
-    const missingCompilerArtifactUri = uri('build/missing.asm');
+    const missingCompilerArtifactUri = uri('build/missing.hex');
     const liveConfigUri = uri('configs/live.merc32.json');
     const liveOutputUri = uri('generated/live');
     const deadConfigUri = uri('configs/dead.merc32.json');
@@ -1573,8 +1573,12 @@ try {
     );
     artifactStore.setCompilerArtifacts([
         { label: 'existing.hex', file: compilerArtifactUri.fsPath, description: 'Assembler output' },
-        { label: 'missing.asm', file: missingCompilerArtifactUri.fsPath, description: 'Tiny C output' },
+        { label: 'missing.hex', file: missingCompilerArtifactUri.fsPath, description: 'Compiler output' },
+        { label: 'intermediate.ASM', file: uri('build/intermediate.ASM').fsPath },
+        { label: 'intermediate.s', file: uri('build/intermediate.s').fsPath },
     ]);
+    assert.deepStrictEqual(artifactStore.getCompilerArtifacts().map(item => item.label), ['existing.hex', 'missing.hex'],
+        'intermediate assembly must not be exposed in the compiler artifact view');
     await artifactStore.refresh();
     const artifactSnapshot = artifactStore.getSnapshot();
     assert.deepStrictEqual(artifactSnapshot.compiler.map((item) => item.label), ['existing.hex'],

@@ -310,7 +310,7 @@ export class Merc32ArtifactStore implements vscode.Disposable {
     }
 
     setCompilerArtifacts(artifacts: readonly ToolchainArtifact[]): void {
-        this.compiler = artifacts.map((artifact) => ({
+        this.compiler = artifacts.filter((artifact) => !['.asm', '.s'].includes(path.extname(artifact.file).toLowerCase())).map((artifact) => ({
             ...artifact,
             uri: this.vscodeApi.Uri.file(artifact.file),
         }));

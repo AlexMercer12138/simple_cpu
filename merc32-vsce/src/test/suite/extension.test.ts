@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 import { COMMANDS } from '../../constants';
+import { Merc32ToolchainExplorer } from '../../toolchainExplorer';
 
 suite('MERC32 C Problems integration', () => {
     const workspacePath = requiredEnvironment('MERC32_TEST_WORKSPACE');
@@ -11,6 +12,44 @@ suite('MERC32 C Problems integration', () => {
 
     teardown(async () => {
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+    });
+
+    test('toolchain exposes C builds without assembly or mode entry points', () => {
+        const provider = new Merc32ToolchainExplorer({ currentMode: 'debug' });
+        try {
+            const commands = provider.getChildren().flatMap(group => provider.getChildren(group))
+                .map(node => node.command?.command);
+            assert.deepStrictEqual(commands, [COMMANDS.buildCToRom]);
+        } finally {
+            provider.dispose();
+        }
+    });
+
+    test('C build exports configured MI without intermediate assembly', async () => {
+        const config = vscode.workspace.getConfiguration('merc32-asm');
+        const overrides: Record<string, unknown> = {
+            outputFormat: 'mi', 'mi.fileFormat': 'Bin', 'mi.addressDepth': 4096,
+            'mi.dataWidth': 32,
+        };
+        const file = path.join(workspacePath, 'final_output.c');
+        fs.writeFileSync(file, 'int main(void) { return 42; }\n');
+        try {
+            for (const [key, value] of Object.entries(overrides)) {
+                await config.update(key, value, vscode.ConfigurationTarget.Workspace);
+            }
+            await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file));
+            await settle(vscode.commands.executeCommand(COMMANDS.buildCToRom));
+            const lines = fs.readFileSync(path.join(workspacePath, 'final_output.mi'), 'utf8').trimEnd().split('\n');
+            assert.deepStrictEqual(lines.slice(0, 3), ['#File_format=Bin', '#Address_depth=4096', '#Data_width=32']);
+            assert.strictEqual(lines.length, 4099);
+            assert.ok(lines.slice(3).every(line => /^[01]{32}$/.test(line)));
+            assert.strictEqual(fs.existsSync(path.join(workspacePath, 'final_output.asm')), false);
+            assert.strictEqual(fs.existsSync(path.join(workspacePath, 'final_output_replaced.asm')), false);
+        } finally {
+            for (const key of Object.keys(overrides)) {
+                await config.update(key, undefined, vscode.ConfigurationTarget.Workspace);
+            }
+        }
     });
 
     test('publishes warnings on success and clears stale diagnostics', async () => {

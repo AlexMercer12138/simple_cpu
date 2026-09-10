@@ -17,7 +17,7 @@ export class Merc32ToolchainExplorer implements vscode.TreeDataProvider<NodeSpec
     private readonly changeEmitter = new vscode.EventEmitter<NodeSpec | undefined | null | void>();
     readonly onDidChangeTreeData = this.changeEmitter.event;
 
-    constructor(private readonly state: ToolchainCommandState) {}
+    constructor(_state: ToolchainCommandState) {}
 
     refresh(): void {
         this.changeEmitter.fire();
@@ -56,11 +56,7 @@ export class Merc32ToolchainExplorer implements vscode.TreeDataProvider<NodeSpec
             kind: 'group',
             icon: 'tools',
             children: [
-                commandNode('Build Active File', COMMANDS.compile, 'Run default build for .c or .asm', 'play'),
-                commandNode('Assemble ASM', COMMANDS.assembleActive, 'Assemble active .asm file', 'file-binary'),
-                commandNode('Compile C to ASM', COMMANDS.compileCToAsm, 'Emit MERC32 assembly from active .c file', 'file-code'),
-                commandNode('Build C to ROM', COMMANDS.buildCToRom, 'Compile C and assemble configured output', 'package'),
-                commandNode('Select Compile Mode', COMMANDS.selectCompileMode, `Current: ${this.state.currentMode}`, 'settings-gear'),
+                commandNode('Build C to Output', COMMANDS.buildCToRom, 'Compile active .c file to the configured output format', 'package'),
             ],
         };
     }

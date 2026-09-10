@@ -6,6 +6,7 @@ import { CDiagnostics } from './cDiagnostics';
 import { COMMANDS } from './constants';
 import {
     buildCFileToRomDetailed,
+    buildCFileToOutputDetailed,
     compileCFileToAssemblyDetailed,
 } from './compilerService';
 import { getActiveAsmFile, getActiveCFile, getActiveMerc32SourceFile } from './editor';
@@ -102,8 +103,8 @@ export function registerAssemblerCommands(
             const file = getActiveCFile();
             if (!file) return;
             runC(file,
-                () => buildCFileToRomDetailed(file, currentMode),
-                (result) => `MERC32 C build complete: ${result.assemblyResult.outputFile || result.assemblyFile}`);
+                () => buildCFileToOutputDetailed(file),
+                (result) => `MERC32 C build complete: ${result.assemblyResult.outputFile}`);
         }),
         vscode.commands.registerCommand(COMMANDS.openLastArtifact, async (artifact?: ToolchainArtifact) => {
             const artifacts = artifactStore.getCompilerArtifacts();

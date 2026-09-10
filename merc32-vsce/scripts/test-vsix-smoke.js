@@ -347,14 +347,20 @@ function assertVsixContents(audit, extensionRoot) {
         'extension/out/cli.js',
         'extension/out/cliInstall.js',
         'extension/out/cliLauncher.js',
-        'extension/language-configuration/language-configuration.json',
-        'extension/syntaxes/merc32-asm.tmLanguage.json',
-        'extension/snippets/merc32-asm.json',
         'extension/resources/webview/socEditor.css',
         'extension/resources/webview/socEditor.js',
         RESOURCE_MANIFEST,
     ];
     for (const logicalPath of requiredFiles) requireArchiveFile(audit, logicalPath);
+    const packageJson = readArchiveJson(audit, 'extension/package.json');
+    assert.deepStrictEqual(packageJson, JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8')),
+        'packaged extension manifest differs from source');
+    for (const key of ['languages', 'grammars', 'snippets']) {
+        assert.ok(!packageJson.contributes[key]?.length, `VSIX contributes unexpected ${key}`);
+    }
+    const publicBuildCommands = packageJson.contributes.commands.filter(item => item.command.startsWith('merc32-asm.'));
+    assert.deepStrictEqual(publicBuildCommands.map(item => item.command).sort(),
+        ['merc32-asm.buildCToRom', 'merc32-asm.openLastArtifact']);
     for (const logicalPath of [
         'c-frontend/aro-merc32.wasm',
         'c-frontend/build-manifest.json',

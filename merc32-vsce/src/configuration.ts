@@ -15,6 +15,11 @@ export function getAssemblerSettings(sourceFile: string): AssemblerSettings {
     return {
         outputFormat: isOutputFormat(rawOutputFormat) ? rawOutputFormat : defaults.outputFormat,
         outputDir: resolveOutputDir(sourceFile, customOutputPath),
+        miOptions: {
+            fileFormat: config.get<'Bin' | 'Hex'>('mi.fileFormat', 'Hex'),
+            addressDepth: config.get<number>('mi.addressDepth', 0),
+            dataWidth: config.get<number>('mi.dataWidth', 32),
+        },
         cKeepAssembly: config.get<boolean>('c.keepAssembly', defaults.cKeepAssembly),
         cDataBase: parseIntegerSetting(config.get<string>('c.dataBase'), defaults.cDataBase),
         cDlbAddrWidth: config.get<number>('c.dlbAddrWidth', defaults.cDlbAddrWidth),

@@ -2,7 +2,7 @@
   "name": "merc32-vsce",
   "displayName": "MERC32 Toolchain",
   "description": "MERC32 SoC configurator, peripheral drivers, C17 compiler and ROM toolchain",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "publisher": "Vikai-mercer",
   "icon": "images/icon.png",
   "repository": "https://github.com/AlexMercer12138/MERC32",
@@ -10,19 +10,17 @@
     "vscode": "^1.74.0"
   },
   "categories": [
-    "Programming Languages"
+    "Other"
   ],
   "keywords": [
-    "assembly",
-    "assembler",
     "merc32",
-    "cpu",
+    "soc",
+    "c",
+    "toolchain",
     "verilog"
   ],
   "activationEvents": [
     "onCommand:merc32.cli.setup",
-    "onLanguage:merc32-asm",
-    "onLanguage:c",
     "onCustomEditor:merc32.socConfigEditor",
     "onView:merc32-toolchain.configurations",
     "onView:merc32-toolchain.generate",
@@ -45,76 +43,20 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
-    "languages": [
-      {
-        "id": "merc32-asm",
-        "aliases": [
-          "MERC32 Assembly",
-          "merc32-asm"
-        ],
-        "extensions": [
-          ".asm"
-        ],
-        "configuration": "./language-configuration/language-configuration.json"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "merc32-asm",
-        "scopeName": "source.merc32-asm",
-        "path": "./syntaxes/merc32-asm.tmLanguage.json"
-      }
-    ],
-    "snippets": [
-      {
-        "language": "merc32-asm",
-        "path": "./snippets/merc32-asm.json"
-      }
-    ],
     "commands": [
       {
         "command": "merc32.cli.setup",
         "title": "MERC32: Set Up Command Line"
       },
       {
-        "command": "merc32-asm.compile",
-        "title": "MERC32: Build Active File",
-        "icon": "$(play)"
-      },
-      {
-        "command": "merc32-asm.assembleActive",
-        "title": "MERC32: Assemble ASM",
-        "icon": "$(file-binary)"
-      },
-      {
-        "command": "merc32-asm.compileCToAsm",
-        "title": "MERC32: Compile C to ASM",
-        "icon": "$(file-code)"
-      },
-      {
         "command": "merc32-asm.buildCToRom",
-        "title": "MERC32: Build C to ROM",
+        "title": "MERC32: Build C to Output",
         "icon": "$(package)"
       },
       {
         "command": "merc32-asm.openLastArtifact",
         "title": "MERC32: Open Last Artifact",
         "icon": "$(go-to-file)"
-      },
-      {
-        "command": "merc32-asm.compilePrint",
-        "title": "MERC32: Assemble ASM (Print Mode)",
-        "icon": "$(output)"
-      },
-      {
-        "command": "merc32-asm.compileDebug",
-        "title": "MERC32: Assemble ASM (Debug Mode)",
-        "icon": "$(bug)"
-      },
-      {
-        "command": "merc32-asm.selectCompileMode",
-        "title": "MERC32: Select Compile Mode",
-        "icon": "$(chevron-down)"
       },
       {
         "command": "merc32.soc.createConfig",
@@ -217,19 +159,9 @@
     "menus": {
       "editor/title": [
         {
-          "when": "resourceExtname == .asm",
-          "command": "merc32-asm.assembleActive",
-          "group": "navigation@1"
-        },
-        {
           "when": "resourceExtname == .c",
           "command": "merc32-asm.buildCToRom",
           "group": "navigation@1"
-        },
-        {
-          "when": "resourceExtname == .asm",
-          "command": "merc32-asm.selectCompileMode",
-          "group": "navigation@2"
         }
       ],
       "view/title": [
@@ -273,7 +205,7 @@
       ]
     },
     "configuration": {
-      "title": "MERC32 Assembler",
+      "title": "MERC32 Toolchain",
       "properties": {
         "merc32-asm.outputFormat": {
           "type": "string",
@@ -284,7 +216,8 @@
             "mif",
             "hex",
             "bin",
-            "mem"
+            "mem",
+            "mi"
           ],
           "enumDescriptions": [
             "Verilog module (.v)",
@@ -292,19 +225,15 @@
             "Altera MIF file (.mif)",
             "Intel HEX file (.hex)",
             "Binary file (.bin)",
-            "$readmemh memory file (.mem)"
+            "$readmemh memory file (.mem)",
+            "Gowin memory initialization file (.mi)"
           ],
-          "description": "Default output format for the assembler"
+          "description": "Output format for C builds"
         },
         "merc32-asm.outputPath": {
           "type": "string",
           "default": "",
           "description": "Custom output directory (leave empty to use same directory as source file)"
-        },
-        "merc32-asm.c.keepAssembly": {
-          "type": "boolean",
-          "default": true,
-          "description": "Keep generated assembly when building C sources"
         },
         "merc32-asm.c.dataBase": {
           "type": "string",
@@ -325,9 +254,35 @@
         },
         "merc32-asm.c.optimization": {
           "type": "string",
-          "enum": ["none", "basic"],
+          "enum": [
+            "none",
+            "basic"
+          ],
           "default": "basic",
           "description": "C optimization mode: basic reduces initialization code, local computations and temporary stack slots"
+        },
+        "merc32-asm.mi.fileFormat": {
+          "type": "string",
+          "enum": [
+            "Hex",
+            "Bin"
+          ],
+          "default": "Hex",
+          "description": "MI File_format: hexadecimal or binary data"
+        },
+        "merc32-asm.mi.addressDepth": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 33554432,
+          "description": "MI Address_depth in words. 0 uses the program length (at least one word); larger depths are zero-filled. Must match the target memory depth."
+        },
+        "merc32-asm.mi.dataWidth": {
+          "type": "integer",
+          "default": 32,
+          "minimum": 1,
+          "maximum": 32,
+          "description": "MI Data_width in bits. Use 32 for MERC32 instruction memory. Values that do not fit are rejected without truncation."
         }
       }
     }
@@ -389,9 +344,10 @@
     "test:smoke-extension:unit": "node scripts/test-smoke-extension.js",
     "test:vsix:unit": "node scripts/test-vsix-smoke-state.js",
     "test:vsix": "node scripts/test-vsix-smoke.js merc32-vsce.vsix",
-    "test": "npm run compile && npm run prepare:resources && node scripts/test-cli.js && node scripts/test-cli-install.js && node scripts/test-test-infrastructure.js && node scripts/test-pseudo-instructions.js && node scripts/test-c-preprocessor.js && node scripts/test-c-compiler.js && node scripts/test-c-embedded-contract.js && node scripts/test-c-embedded.js && node scripts/test-c-aggregate-calls.js && node scripts/test-c-optimization.js && node scripts/test-c-registers.js && node scripts/test-c-irq-intrinsics.js && node scripts/test-runtime-memory-execution.js && node scripts/test-linker-relaxation.js && node scripts/test-c-far-control-flow.js && node scripts/test-linker-gc.js && node scripts/test-c-function-gc.js && node scripts/test-c-inline.js && node scripts/test-c-control-flow.js",
+    "test": "npm run compile && npm run prepare:resources && node scripts/test-mi-output.js && node scripts/test-cli.js && node scripts/test-cli-install.js && node scripts/test-test-infrastructure.js && node scripts/test-pseudo-instructions.js && node scripts/test-c-preprocessor.js && node scripts/test-c-compiler.js && node scripts/test-c-embedded-contract.js && node scripts/test-c-embedded.js && node scripts/test-c-aggregate-calls.js && node scripts/test-c-optimization.js && node scripts/test-c-registers.js && node scripts/test-c-irq-intrinsics.js && node scripts/test-runtime-memory-execution.js && node scripts/test-linker-relaxation.js && node scripts/test-c-far-control-flow.js && node scripts/test-linker-gc.js && node scripts/test-c-function-gc.js && node scripts/test-c-inline.js && node scripts/test-c-control-flow.js",
     "flash:image": "npm run compile && node out/flashImage.js",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "test:mi": "npm run compile && node scripts/test-mi-output.js"
   },
   "dependencies": {
     "ajv": "^8.17.1",

@@ -1,8 +1,15 @@
 import type { Buffer } from 'buffer';
 
-export const OUTPUT_FORMATS = ['verilog', 'coe', 'mif', 'hex', 'bin', 'mem'] as const;
+export const OUTPUT_FORMATS = ['verilog', 'coe', 'mif', 'hex', 'bin', 'mem', 'mi'] as const;
 export type OutputFormat = typeof OUTPUT_FORMATS[number];
 export const DEFAULT_OUTPUT_FORMAT: OutputFormat = 'verilog';
+
+export interface MiOutputOptions {
+    fileFormat?: 'Bin' | 'Hex';
+    /** Zero selects the number of output words (at least one). */
+    addressDepth?: number;
+    dataWidth?: number;
+}
 
 export const COMPILE_MODES = ['normal', 'print', 'debug'] as const;
 export type CompileMode = typeof COMPILE_MODES[number];

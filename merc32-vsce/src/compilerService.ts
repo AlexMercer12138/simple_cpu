@@ -22,3 +22,11 @@ export function buildCFileToRom(sourceFile: string, mode: CompileMode): build.CB
 export function buildCFileToRomDetailed(sourceFile: string, mode: CompileMode) {
     return build.buildCFileToRomDetailed(sourceFile, mode, getAssemblerSettings(sourceFile));
 }
+
+/** Public editor builds expose only the final output, independent of legacy ASM settings. */
+export function buildCFileToOutputDetailed(sourceFile: string) {
+    return build.buildCFileToRomDetailed(sourceFile, 'normal', {
+        ...getAssemblerSettings(sourceFile),
+        cKeepAssembly: false,
+    });
+}

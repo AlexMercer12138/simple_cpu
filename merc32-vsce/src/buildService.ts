@@ -81,6 +81,7 @@ export function buildCFileToRomDetailed(sourceFile: string,
         settings.outputFormat,
         mode,
         settings.outputDir,
+        settings.miOptions,
     );
 
     const artifacts = [...compiled.artifact.artifacts];

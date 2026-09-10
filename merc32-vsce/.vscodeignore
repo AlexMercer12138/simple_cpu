@@ -8,6 +8,9 @@ scripts/**
 .test-results/**
 .git/**
 rtl/**
+language-configuration/**
+syntaxes/**
+snippets/**
 
 # Development-only dependencies and metadata
 node_modules/@types/**

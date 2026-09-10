@@ -1,4 +1,4 @@
-import { OutputFormat } from './types';
+import { MiOutputOptions, OutputFormat } from './types';
 
 export const OUTPUT_EXTENSIONS: Record<OutputFormat, string> = {
     verilog: '.v',
@@ -7,9 +7,11 @@ export const OUTPUT_EXTENSIONS: Record<OutputFormat, string> = {
     hex: '.hex',
     bin: '.bin',
     mem: '.mem',
+    mi: '.mi',
 };
 
-export function formatAssemblyOutput(codes: number[], format: OutputFormat, moduleName: string): string | Buffer {
+export function formatAssemblyOutput(codes: number[], format: OutputFormat, moduleName: string,
+    miOptions: MiOutputOptions = {}): string | Buffer {
     switch (format) {
         case 'verilog':
             return formatVerilog(codes, moduleName);
@@ -23,7 +25,41 @@ export function formatAssemblyOutput(codes: number[], format: OutputFormat, modu
             return formatBinBytes(codes);
         case 'mem':
             return formatReadmemh(codes);
+        case 'mi':
+            return formatMi(codes, miOptions);
     }
+}
+
+function formatMi(codes: number[], options: MiOutputOptions): string {
+    const { fileFormat = 'Hex', addressDepth = 0, dataWidth = 32 } = options;
+    if (fileFormat !== 'Bin' && fileFormat !== 'Hex') {
+        throw new Error('MI File_format must be Bin or Hex');
+    }
+    if (!Number.isInteger(addressDepth) || addressDepth < 0 || addressDepth > 2 ** 25) {
+        throw new Error('MI Address_depth must be an integer in 0..33554432 (0 = automatic)');
+    }
+    if (!Number.isInteger(dataWidth) || dataWidth < 1 || dataWidth > 32) {
+        throw new Error('MI Data_width must be an integer in 1..32');
+    }
+    const depth = addressDepth || Math.max(1, codes.length);
+    if (codes.length > depth) {
+        throw new Error(`MI Address_depth ${depth} is smaller than the ${codes.length} output words`);
+    }
+    const radix = fileFormat === 'Bin' ? 2 : 16;
+    const digits = fileFormat === 'Bin' ? dataWidth : Math.ceil(dataWidth / 4);
+    const lines = [`#File_format=${fileFormat}`, `#Address_depth=${depth}`, `#Data_width=${dataWidth}`];
+    for (let index = 0; index < depth; index++) {
+        const code = codes[index] ?? 0;
+        if (!Number.isInteger(code) || code < -0x80000000 || code > 0xffffffff) {
+            throw new Error(`MI word ${index} is not a 32-bit integer`);
+        }
+        const word = code >>> 0;
+        if (word >= 2 ** dataWidth) {
+            throw new Error(`MI word ${index} does not fit Data_width=${dataWidth}`);
+        }
+        lines.push(word.toString(radix).toUpperCase().padStart(digits, '0'));
+    }
+    return `${lines.join('\n')}\n`;
 }
 
 export function formatPrintOutput(output: string | Buffer, format: OutputFormat): string {
