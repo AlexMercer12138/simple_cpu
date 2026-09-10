@@ -40,6 +40,13 @@ MERC32/
 └── README.md                     # 项目介绍
 ```
 
+### CPU 功能回归
+
+在 `merc32-vsce` 目录执行 `npm run test:cpu`，运行 CPU 指令、Local Bus、
+乘除法、JTAG 和 C17 固件（两档优化）的 RTL 回归。`example` 中的测试直接使用
+当前 C 工具链编译，不维护过时的汇编/ROM 副本。独立外设 IP 测试在 IP 仓库维护。
+覆盖范围和执行方式见 [example/README.md](example/README.md)。
+
 ### 端口说明
 
 | 信号 | 方向 | 位宽 | 描述 |

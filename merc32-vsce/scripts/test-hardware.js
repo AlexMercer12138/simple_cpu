@@ -27,7 +27,6 @@ const hardwareTests = [
             ['rtl', 'misc', 'mul.v'],
             ['rtl', 'misc', 'div.v'],
             ['rtl', 'debug', 'jtag_debug.v'],
-            ['rtl', 'bridge', 'lb2apb.v'],
             ['rtl', 'cpu', 'core.v'],
             ['rtl', 'cpu', 'MERC32_top.v'],
             ['rtl', 'sim', 'MERC32_top_tb.v'],
@@ -71,24 +70,6 @@ const hardwareTests = [
         rtlFiles: [
             ['rtl', 'misc', 'div.v'],
             ['rtl', 'sim', 'div_tb.v'],
-        ],
-    },
-    {
-        name: 'spram',
-        top: 'spram_tb',
-        marker: 'TEST PASS: spram checks=23',
-        rtlFiles: [
-            ['rtl', 'misc', 'spram.v'],
-            ['rtl', 'sim', 'spram_tb.v'],
-        ],
-    },
-    {
-        name: 'apb_intc protected',
-        top: 'apb_intc_tb',
-        marker: 'TEST PASS: apb_intc',
-        rtlFiles: [
-            ['rtl', 'apb_intc', 'apb_intc.v'],
-            ['rtl', 'sim', 'apb_intc_tb.v'],
         ],
     },
 ];

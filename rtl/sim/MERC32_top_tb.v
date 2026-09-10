@@ -46,17 +46,9 @@ module MERC32_top_tb;
     wire    [31:0]                      plb_addr;
     wire    [3:0]                       plb_strb;
     wire    [31:0]                      plb_wdata;
-    wire    [31:0]                      plb_rdata;
-    wire                                plb_ack;
+    reg     [31:0]                      plb_rdata = 32'd0;
+    reg                                 plb_ack = 1'b0;
 
-    wire                                m_apb_psel;
-    wire                                m_apb_penable;
-    wire    [31:0]                      m_apb_paddr;
-    wire                                m_apb_pwrite;
-    wire    [3:0]                       m_apb_pstrb;
-    wire    [31:0]                      m_apb_pwdata;
-    reg     [31:0]                      m_apb_prdata = 32'h0;
-    reg                                 m_apb_pready = 1'b1;
 
     reg     [31:0]                      instruction_memory [0:255];
     reg     [31:0]                      data_memory [0:255];
@@ -187,28 +179,16 @@ module MERC32_top_tb;
         .plb_rdata                      (plb_rdata              ),
         .plb_ack                        (plb_ack                ));
 
-    lb2apb #(
-        .DATA_WIDTH                     (32                     ),
-        .LB_ADDR_WIDTH                  (32                     ),
-        .APB_ADDR_WIDTH                 (32                     ))
-    test_lb2apb (
-        .clk                            (clk                    ),
-        .rst_n                          (rst_n                  ),
-        .lb_rden                        (plb_rden               ),
-        .lb_wren                        (plb_wren               ),
-        .lb_strb                        (plb_strb               ),
-        .lb_wdata                       (plb_wdata              ),
-        .lb_addr                        (plb_addr               ),
-        .lb_rdata                       (plb_rdata              ),
-        .lb_valid                       (plb_ack                ),
-        .m_apb_psel                     (m_apb_psel             ),
-        .m_apb_penable                  (m_apb_penable          ),
-        .m_apb_paddr                    (m_apb_paddr            ),
-        .m_apb_pwrite                   (m_apb_pwrite           ),
-        .m_apb_pstrb                    (m_apb_pstrb            ),
-        .m_apb_pwdata                   (m_apb_pwdata           ),
-        .m_apb_prdata                   (m_apb_prdata           ),
-        .m_apb_pready                   (m_apb_pready           ));
+    // CPU Local Bus responder; external protocol bridges are tested in ip-repo.
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            plb_ack <= 1'b0;
+            plb_rdata <= 32'd0;
+        end else begin
+            plb_ack <= plb_rden | plb_wren;
+            plb_rdata <= 32'd0;
+        end
+    end
 
     task jtag_cycle;
         input   next_tms;

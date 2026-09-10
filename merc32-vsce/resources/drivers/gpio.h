@@ -3,7 +3,7 @@
  * @brief   APB GPIO 裸机驱动头文件
  * @details 基于基地址 + 寄存器偏移的访问方式，支持 32 个独立引脚的
  *          方向配置、输出读写、原子置位/清零/翻转、输入读取以及
- *          全局触发类型的中断管理。
+ *          可配置周期的输入去抖和全局触发类型的中断管理。
  *
  * 对应 RTL: apb_gpio.v
  * 对应手册: apb_gpio_manual.md
@@ -30,10 +30,11 @@ extern "C" {
 #define GPIO_REG_SET         0x0CU  /**< 原子置位（W，写 1 置位，读返回 0）    */
 #define GPIO_REG_CLEAR       0x10U  /**< 原子清零（W，写 1 清零，读返回 0）    */
 #define GPIO_REG_TOGGLE      0x14U  /**< 原子翻转（W，写 1 翻转，读返回 0）    */
-#define GPIO_REG_IN          0x18U  /**< 输入寄存器（R，双级同步后的值）        */
+#define GPIO_REG_IN          0x18U  /**< 输入寄存器（R，同步及可选去抖后的值） */
 #define GPIO_REG_IRQ_TYPE    0x1CU  /**< 中断触发类型（R/W，全局，[2:0] 有效） */
 #define GPIO_REG_IRQ_ENABLE  0x20U  /**< 中断使能掩码（R/W，每引脚独立）        */
 #define GPIO_REG_IRQ_STATUS  0x24U  /**< 中断状态（R/W1C，粘滞待处理位）        */
+#define GPIO_REG_DEBOUNCE_CYCLES 0x28U /**< 去抖周期（R/W，PCLK 周期数，0=关闭） */
 
 /* =========================================================================
  * 2. 位定义与掩码
@@ -102,7 +103,7 @@ typedef enum {
  * @note 写 IRQ_TYPE 会产生三个副作用：
  *       1. 清除全部 IRQ_STATUS 位；
  *       2. 该时钟禁止产生新事件；
- *       3. 以当前同步输入重建边沿历史基准。
+ *       3. 以当前同步及可选去抖后的输入重建边沿历史基准。
  *       因此改变触发类型不会把当前稳定电平误判为一次边沿。
  */
 typedef enum {
@@ -182,6 +183,7 @@ int gpio_init(gpio_handle_t *h, uintptr_t base_addr);
  *          - 清零中断使能（IRQ_ENABLE = 0）
  *          - IRQ_TYPE 恢复为禁用编码 7
  *          - 清除全部待处理状态（IRQ_STATUS = 0）
+ *          - 关闭去抖并清零计数器（DEBOUNCE_CYCLES = 0）
  *
  * @note    软复位是同步复位，在 PCLK 上升沿生效。
  *          复位后输入同步器需要约 2 个 PCLK 才能输出有效值。
@@ -303,7 +305,7 @@ void gpio_config_output(gpio_handle_t *h, uint32_t mask, gpio_level_t init_level
  * @param  pin 引脚编号（0~31）
  * @return GPIO_LEVEL_HIGH 或 GPIO_LEVEL_LOW
  *
- * @note  读取的是经过双级同步器后的值，不包含去抖功能。
+ * @note  读取的是经过双级同步器和可选硬件去抖后的值。
  *        复位后需等待约 2 个 PCLK 同步器才输出有效值。
  */
 gpio_level_t gpio_read_pin(gpio_handle_t *h, uint32_t pin);
@@ -311,7 +313,7 @@ gpio_level_t gpio_read_pin(gpio_handle_t *h, uint32_t pin);
 /**
  * @brief  读取全部 32 位输入值
  * @param  h GPIO 句柄指针
- * @return 32 位同步输入值
+ * @return 32 位同步及可选去抖后的输入值
  */
 uint32_t gpio_read_in(gpio_handle_t *h);
 
@@ -322,6 +324,19 @@ uint32_t gpio_read_in(gpio_handle_t *h);
  * @return 掩码后的输入值（未选中位为 0）
  */
 uint32_t gpio_read_in_mask(gpio_handle_t *h, uint32_t mask);
+
+/**
+ * @brief 设置全部引脚共用的去抖周期，各引脚独立计数
+ * @param h GPIO 句柄指针
+ * @param cycles 连续稳定的 PCLK 采样数，0=关闭，1~UINT32_MAX=开启
+ * @note 写入（即使值不变）会重启计数并保留当前接受电平。
+ *       0 旁路时立即使用同步输入，输入变化可产生中断。
+ *       例如 50 MHz 下 500000 周期对应 10 ms，不含同步延迟。
+ */
+void gpio_set_debounce_cycles(gpio_handle_t *h, uint32_t cycles);
+
+/** @brief 读取当前去抖周期，0 表示关闭 */
+uint32_t gpio_get_debounce_cycles(gpio_handle_t *h);
 
 /* =========================================================================
  * 10. 中断配置
@@ -423,7 +438,8 @@ void gpio_irq_clear_status(gpio_handle_t *h, uint32_t mask);
  *          5. 使能目标引脚中断
  *
  * @note    调用方应在配置前确保 PCLK 已稳定运行至少 2 个周期，
- *          以使输入同步器输出有效。若刚复位，可插入短延时。
+ *          以使输入同步器输出有效。启用去抖时还需等待输入完成
+ *          连续稳定采样；本函数不会等待去抖完成。
  */
 void gpio_irq_config_edge(gpio_handle_t *h, uint32_t mask, gpio_irq_type_t type);
 

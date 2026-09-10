@@ -220,6 +220,16 @@ uint32_t gpio_read_in_mask(gpio_handle_t *h, uint32_t mask)
     return gpio_reg_read(h->base, GPIO_REG_IN) & (mask & GPIO_PIN_MASK);
 }
 
+void gpio_set_debounce_cycles(gpio_handle_t *h, uint32_t cycles)
+{
+    gpio_reg_write(h->base, GPIO_REG_DEBOUNCE_CYCLES, cycles);
+}
+
+uint32_t gpio_get_debounce_cycles(gpio_handle_t *h)
+{
+    return gpio_reg_read(h->base, GPIO_REG_DEBOUNCE_CYCLES);
+}
+
 /* =========================================================================
  * 5. 中断配置
  * ========================================================================= */
@@ -233,7 +243,7 @@ void gpio_irq_set_type(gpio_handle_t *h, gpio_irq_type_t type)
      * 重要副作用（RTL 中 irq_type_write 时）：
      * - irq_status_reg <= 32'd0（清除全部待处理位）
      * - 该拍 irq_event 被屏蔽（irq_event = 0）
-     * - 下一拍以当前同步输入重建 gpio_previous_reg 和 irq_history_valid
+     * - 以当前同步及可选去抖后的输入重建边沿历史
      */
     gpio_reg_write(h->base, GPIO_REG_IRQ_TYPE, (uint32_t)type & 0x7U);
 }
@@ -340,7 +350,7 @@ void gpio_irq_config_edge(gpio_handle_t *h, uint32_t mask, gpio_irq_type_t type)
      * 这一步会自动：
      *   - 清除全部 IRQ_STATUS（irq_status_reg <= 0）
      *   - 该拍禁止新事件产生
-     *   - 以当前同步输入重建边沿历史基准（gpio_previous_reg）
+     *   - 以当前同步及可选去抖后的输入重建边沿历史基准
      * 因此不会把当前稳定电平误判为一次边沿。
      *
      * 注意：IRQ_TYPE 是全局配置，会影响所有 32 个引脚，

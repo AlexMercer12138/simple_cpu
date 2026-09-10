@@ -108,7 +108,7 @@ module tinyc_cpu_tb();
     initial begin
         for (i = 0; i < MEMORY_WORDS; i = i + 1) begin
             program_rom[i] = 32'd0;
-            dlb_ram[i] = 32'd0;
+            dlb_ram[i] = $test$plusargs("POISON_RAM") ? 32'ha5a5_a5a5 : 32'd0;
         end
 
         if (!$value$plusargs("ROM_FILE=%s", rom_file)) begin

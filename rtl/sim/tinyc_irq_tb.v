@@ -28,6 +28,7 @@ module tinyc_irq_tb();
     wire        dlb_rden;
     wire        dlb_wren;
     wire [15:0] dlb_addr;
+    wire [3:0]  dlb_strb;
     wire [31:0] dlb_wdata;
     reg  [31:0] dlb_rdata = 32'd0;
     reg         dlb_ack = 1'b0;
@@ -50,6 +51,7 @@ module tinyc_irq_tb();
     integer handler_pass_count = 0;
     integer error_count = 0;
     integer reg_index = 0;
+    integer halt_pc = -1;
     reg [31:0] saved_return = 32'd0;
     reg [31:0] second_return = 32'd0;
     reg [31:0] saved_regs [0:15];
@@ -85,6 +87,7 @@ module tinyc_irq_tb();
         .dlb_rden       (dlb_rden),
         .dlb_wren       (dlb_wren),
         .dlb_addr       (dlb_addr),
+        .dlb_strb       (dlb_strb),
         .dlb_wdata      (dlb_wdata),
         .dlb_rdata      (dlb_rdata),
         .dlb_ack        (dlb_ack),
@@ -129,7 +132,7 @@ module tinyc_irq_tb();
     initial begin
         for (i = 0; i < MEMORY_WORDS; i = i + 1) begin
             program_rom[i] = 32'd0;
-            dlb_ram[i] = 32'd0;
+            dlb_ram[i] = $test$plusargs("POISON_RAM") ? 32'ha5a5_a5a5 : 32'd0;
         end
 
         if (!$value$plusargs("ROM_FILE=%s", rom_file)) begin
@@ -145,6 +148,7 @@ module tinyc_irq_tb();
         end
 
         $readmemh(rom_file, program_rom, 0, rom_words - 1);
+        if ($value$plusargs("HALT_PC=%d", halt_pc)) begin end
     end
 
     always @(posedge clk) begin
@@ -160,8 +164,12 @@ module tinyc_irq_tb();
             if (ilb_rden)
                 ilb_rdata <= program_rom[ilb_addr];
             dlb_ack <= dlb_rden | dlb_wren;
-            if (dlb_wren)
-                dlb_ram[dlb_addr] <= dlb_wdata;
+            if (dlb_wren) begin
+                if (dlb_strb[0]) dlb_ram[dlb_addr][7:0] <= dlb_wdata[7:0];
+                if (dlb_strb[1]) dlb_ram[dlb_addr][15:8] <= dlb_wdata[15:8];
+                if (dlb_strb[2]) dlb_ram[dlb_addr][23:16] <= dlb_wdata[23:16];
+                if (dlb_strb[3]) dlb_ram[dlb_addr][31:24] <= dlb_wdata[31:24];
+            end
             if (dlb_rden)
                 dlb_rdata <= dlb_ram[dlb_addr];
             plb_rdata <= 32'd0;
@@ -252,6 +260,16 @@ module tinyc_irq_tb();
             record_error("held-high IRQ enters twice", 32'd2,
                          interrupt_count);
 
+        if ($test$plusargs("CHECK_COMPLETION")) begin
+            wait (merc32_core_inst.prog_addr == halt_pc);
+            if (dlb_ram[STATUS_ADDR] !== 32'h600d)
+                record_error("C firmware completion", 32'h600d, dlb_ram[STATUS_ADDR]);
+            if (merc32_core_inst.regi_int[13] !== 32'h08040000)
+                record_error("C return stack", 32'h08040000, merc32_core_inst.regi_int[13]);
+            if (merc32_core_inst.regi_int[4] !== 32'd0)
+                record_error("C return value", 32'd0, merc32_core_inst.regi_int[4]);
+        end
+
         done = 1'b1;
         if ((error_count == 0) && first_service_seen && second_return_seen)
             $display("TEST PASS");
@@ -266,6 +284,10 @@ module tinyc_irq_tb();
             cycle_count <= 0;
         else if (!done) begin
             cycle_count <= cycle_count + 1;
+            if (dlb_wren && (dlb_addr == STATUS_ADDR) && (dlb_wdata == 32'h0bad)) begin
+                $display("TEST FAIL: IRQ firmware detail=0x%08h", dlb_ram[241]);
+                $finish;
+            end
             if (cycle_count >= MAX_CYCLES) begin
                 done <= 1'b1;
                 $display("TEST TIMEOUT: minimal IRQ pc=0x%08h state=0x%02h status=0x%08h interrupts=%0d",
