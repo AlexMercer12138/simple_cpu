@@ -18,8 +18,8 @@ export class AssemblyRunner implements vscode.Disposable {
     run(file: string, mode: CompileMode): FileAssemblyResult | undefined {
         try {
             const sourceCode = fs.readFileSync(file, 'utf-8');
-            const { outputFormat, outputDir, miOptions } = getAssemblerSettings(file);
-            const result = assembleFile(sourceCode, file, outputFormat, mode, outputDir, miOptions);
+            const { outputFormat, outputDir } = getAssemblerSettings(file);
+            const result = assembleFile(sourceCode, file, outputFormat, mode, outputDir);
             this.showSuccess(mode, result);
             return result;
         } catch (error) {

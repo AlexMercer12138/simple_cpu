@@ -168,13 +168,11 @@ async function run() {
         await vscode.window.showTextDocument(cDocument, { preview: false });
         const toolchainConfig = vscode.workspace.getConfiguration('merc32-asm');
         await toolchainConfig.update('outputFormat', 'mi', vscode.ConfigurationTarget.Workspace);
-        await toolchainConfig.update('mi.fileFormat', 'Bin', vscode.ConfigurationTarget.Workspace);
-        await toolchainConfig.update('mi.addressDepth', 4096, vscode.ConfigurationTarget.Workspace);
         await vscode.commands.executeCommand('merc32-asm.buildCToRom');
         const miLines = fs.readFileSync(path.join(cSmokeRoot, 'main.mi'), 'utf8').trimEnd().split('\n');
-        assert.deepStrictEqual(miLines.slice(0, 3), ['#File_format=Bin', '#Address_depth=4096', '#Data_width=32']);
-        assert.strictEqual(miLines.length, 4099);
-        assert.ok(miLines.slice(3).every(line => /^[01]{32}$/.test(line)));
+        assert.deepStrictEqual(miLines.slice(0, 3), ['#File_format=Hex', '#Address_depth=' + (miLines.length - 3), '#Data_width=32']);
+        assert.ok(miLines.length > 3);
+        assert.ok(miLines.slice(3).every(line => /^[0-9A-F]{8}$/.test(line)));
         assert.strictEqual(fs.existsSync(path.join(cSmokeRoot, 'main.asm')), false,
             'public C build emitted intermediate assembly');
         assert.strictEqual(fs.existsSync(path.join(cSmokeRoot, 'main_replaced.asm')), false);

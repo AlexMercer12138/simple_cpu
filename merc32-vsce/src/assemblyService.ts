@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { SimpleCPUAssembler } from './assembler';
 import { formatAssemblyOutput, formatPrintOutput, OUTPUT_EXTENSIONS } from './outputFormatters';
-import { CompileMode, FileAssemblyResult, MiOutputOptions, OutputFormat } from './types';
+import { CompileMode, FileAssemblyResult, OutputFormat } from './types';
 
 export function assembleFile(
     sourceCode: string,
@@ -10,12 +10,11 @@ export function assembleFile(
     format: OutputFormat,
     mode: CompileMode,
     outputDir?: string,
-    miOptions?: MiOutputOptions,
 ): FileAssemblyResult {
     const assembler = new SimpleCPUAssembler();
     const result = assembler.assemble(sourceCode, { sourceFileName });
     const baseName = result.programName || path.basename(sourceFileName, path.extname(sourceFileName));
-    const output = formatAssemblyOutput(result.machineCodes, format, baseName, miOptions);
+    const output = formatAssemblyOutput(result.machineCodes, format, baseName);
 
     if (mode === 'print') {
         return {

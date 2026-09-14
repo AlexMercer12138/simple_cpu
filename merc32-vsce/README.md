@@ -117,25 +117,20 @@ C 编译面向裸机环境，不包含完整标准库；尚不支持浮点运算
 
 ### 高云 MI 输出
 
-将输出格式设为 `mi`，通过以下配置匹配高云内存 IP：
+将输出格式设为 `mi` 即可，无需设置专属参数。与 COE、MIF 一样使用 Hex，数据位宽固定为 32 位。
+
+文件头依次为 `#File_format=Hex`、`#Address_depth=<输出字数>`、`#Data_width=32`，其后每行一个 8 位十六进制数据。深度自动等于数据行数；空程序输出一个零数据。
 
 ```json
 {
-  "merc32-asm.outputFormat": "mi",
-  "merc32-asm.mi.fileFormat": "Hex",
-  "merc32-asm.mi.addressDepth": 8192,
-  "merc32-asm.mi.dataWidth": 32
+  "merc32-asm.outputFormat": "mi"
 }
 ```
 
-文件头依次为 `#File_format=Hex`（或 `Bin`）、`#Address_depth=8192`、`#Data_width=32`，其后每行一个数据。上述设置恰好输出 8192 行数据，不足补零；深度以数据字为单位（8192 × 32 位 = 32 KiB）。深度设为 `0` 时自动使用程序字数，空程序至少输出一个零。
-
-Bin 每行恰好 `Data_width` 个二进制位；Hex 每行恰好 `ceil(Data_width / 4)` 个十六进制数字，未使用的高位为零。数据位宽支持 1–32 位，MERC32 指令存储器应使用 32 位。程序超过深度或数据超过位宽时构建失败，不会截断数据或覆盖已有 MI 文件。
-
-独立 CLI 同样支持：
+独立 CLI 同样只需指定输出格式：
 
 ```powershell
-merc32 build main.c --format mi --mi-file-format Bin --mi-depth 8192 --mi-width 32 --no-keep-assembly
+merc32 build main.c --format mi --no-keep-assembly
 ```
 
 ## 配置项
@@ -146,9 +141,6 @@ merc32 build main.c --format mi --mi-file-format Bin --mi-depth 8192 --mi-width 
 | --- | --- | --- |
 | `merc32-asm.outputFormat` | `verilog` | `verilog` / `coe` / `mif` / `hex` / `bin` / `mem` / `mi` |
 | `merc32-asm.outputPath` | 空 | 输出目录，空则使用源文件目录 |
-| `merc32-asm.mi.fileFormat` | `Hex` | MI 数据进制：`Hex` / `Bin` |
-| `merc32-asm.mi.addressDepth` | `0` | MI 深度（字数），0 自动；不足补零 |
-| `merc32-asm.mi.dataWidth` | `32` | MI 数据位宽，MERC32 指令使用 32 |
 | `merc32-asm.c.optimization` | `basic` | 优化模式，可设为 `none` 关闭 |
 | `merc32-asm.c.dataBase` | `0x08000000` | DLB 数据基址 |
 | `merc32-asm.c.dlbAddrWidth` | `16` | DLB 字地址位宽，用于设置栈顶 |

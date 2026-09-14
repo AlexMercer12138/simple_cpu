@@ -19,9 +19,6 @@ Usage:
 Options:
   --out-dir <directory>      Output directory (default: source directory)
   --format <format>          verilog (default), coe, mif, hex, bin, mem, mi
-  --mi-file-format <radix>   Hex (default) or Bin
-  --mi-depth <words>         MI depth, 0 = automatic (default)
-  --mi-width <bits>          MI data width, 1..32 (default: 32)
   --mode <mode>              normal (default), print, debug
   --optimization <level>     basic (default), none
   --code-base <address>      ILB byte address (default: 0x00000000)
@@ -86,7 +83,7 @@ function parseArguments(args: readonly string[]): Arguments {
             continue;
         }
         if (!['--out-dir', '--format', '--mode', '--optimization', '--code-base', '--data-base',
-            '--dlb-addr-width', '--mi-file-format', '--mi-depth', '--mi-width', '--emit', '-I', '-D'].includes(arg)) {
+            '--dlb-addr-width', '--emit', '-I', '-D'].includes(arg)) {
             throw new UsageError(`Unknown option: ${arg}`);
         }
         const value = attached ?? args[++i];
@@ -98,13 +95,6 @@ function parseArguments(args: readonly string[]): Arguments {
             case '--format':
                 if (!isOutputFormat(value)) throw new UsageError(`Invalid output format: ${value}`);
                 settings.outputFormat = value; break;
-            case '--mi-file-format':
-                if (value !== 'Bin' && value !== 'Hex') throw new UsageError('MI File_format must be Bin or Hex');
-                settings.miOptions = { ...settings.miOptions, fileFormat: value }; break;
-            case '--mi-depth':
-                settings.miOptions = { ...settings.miOptions, addressDepth: integer(value, arg, 0, 2 ** 25) }; break;
-            case '--mi-width':
-                settings.miOptions = { ...settings.miOptions, dataWidth: integer(value, arg, 1, 32) }; break;
             case '--mode':
                 if (!(COMPILE_MODES as readonly string[]).includes(value)) throw new UsageError(`Invalid mode: ${value}`);
                 mode = value as CompileMode; break;
@@ -126,9 +116,6 @@ function parseArguments(args: readonly string[]): Arguments {
         }
     }
     if (!source) throw new UsageError('An input file is required.');
-    if (settings.miOptions && (settings.outputFormat !== 'mi' || command === 'compile')) {
-        throw new UsageError('MI options require a ROM build with --format mi');
-    }
     const sourceFile = path.resolve(source);
     const extension = path.extname(sourceFile).toLowerCase();
     if (!['.c', '.asm'].includes(extension) || (command === 'compile' && extension !== '.c')
@@ -170,7 +157,7 @@ export function runCli(args: readonly string[] = process.argv.slice(2)): number 
         const { command, sourceFile, settings, mode, compiler } = parseArguments(args);
         if (path.extname(sourceFile).toLowerCase() === '.asm') {
             const result = assembleFile(fs.readFileSync(sourceFile, 'utf8'), sourceFile,
-                settings.outputFormat, mode, settings.outputDir, settings.miOptions);
+                settings.outputFormat, mode, settings.outputDir);
             process.stdout.write(`${mode === 'print' ? result.output.toString() : result.outputFile}\n`);
             return 0;
         }

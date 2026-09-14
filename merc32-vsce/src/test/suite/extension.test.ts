@@ -25,11 +25,10 @@ suite('MERC32 C Problems integration', () => {
         }
     });
 
-    test('C build exports configured MI without intermediate assembly', async () => {
+    test('C build exports automatic Hex MI without intermediate assembly', async () => {
         const config = vscode.workspace.getConfiguration('merc32-asm');
         const overrides: Record<string, unknown> = {
-            outputFormat: 'mi', 'mi.fileFormat': 'Bin', 'mi.addressDepth': 4096,
-            'mi.dataWidth': 32,
+            outputFormat: 'mi',
         };
         const file = path.join(workspacePath, 'final_output.c');
         fs.writeFileSync(file, 'int main(void) { return 42; }\n');
@@ -40,9 +39,9 @@ suite('MERC32 C Problems integration', () => {
             await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file));
             await settle(vscode.commands.executeCommand(COMMANDS.buildCToRom));
             const lines = fs.readFileSync(path.join(workspacePath, 'final_output.mi'), 'utf8').trimEnd().split('\n');
-            assert.deepStrictEqual(lines.slice(0, 3), ['#File_format=Bin', '#Address_depth=4096', '#Data_width=32']);
-            assert.strictEqual(lines.length, 4099);
-            assert.ok(lines.slice(3).every(line => /^[01]{32}$/.test(line)));
+            assert.deepStrictEqual(lines.slice(0, 3), ['#File_format=Hex', '#Address_depth=' + (lines.length - 3), '#Data_width=32']);
+            assert.ok(lines.length > 3);
+            assert.ok(lines.slice(3).every(line => /^[0-9A-F]{8}$/.test(line)));
             assert.strictEqual(fs.existsSync(path.join(workspacePath, 'final_output.asm')), false);
             assert.strictEqual(fs.existsSync(path.join(workspacePath, 'final_output_replaced.asm')), false);
         } finally {

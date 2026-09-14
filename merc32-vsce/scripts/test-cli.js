@@ -58,17 +58,15 @@ for (const format of ['verilog', 'coe', 'mif', 'hex', 'bin', 'mem', 'mi']) {
     assert.deepEqual(fs.readFileSync(file), Buffer.from(formatAssemblyOutput(assembled.machineCodes, format, 'main_space')));
     assert.ok(result.stdout.includes(file));
 }
-run(['build', source, ...common, '--format', 'mi', '--mi-file-format', 'Bin',
-    '--mi-depth', '4096', '--mi-width', '32', '--out-dir', 'mi configured', '--no-keep-assembly']);
-const miLines = fs.readFileSync(path.join(scratch, 'mi configured', 'main_space.mi'), 'utf8').trimEnd().split('\n');
-assert.deepEqual(miLines.slice(0, 3), ['#File_format=Bin', '#Address_depth=4096', '#Data_width=32']);
-assert.equal(miLines.length, 4099);
-assert.ok(miLines.slice(3).every(line => /^[01]{32}$/.test(line)));
-assert.deepEqual(miLines.slice(3, 3 + assembled.machineCodes.length).map(line => parseInt(line, 2)),
-    assembled.machineCodes.map(word => word >>> 0));
-assert.ok(miLines.slice(3 + assembled.machineCodes.length).every(line => /^0+$/.test(line)));
-run(['build', source, ...common, '--format', 'mi', '--mi-depth', '1'], 1);
-run(['assemble', asmFile, '--format', 'mi', '--mi-file-format', 'Hex', '--out-dir', 'mi assembled']);
+const miLines = fs.readFileSync(path.join(scratch, 'output mi', 'main_space.mi'), 'utf8').trimEnd().split('\n');
+assert.deepEqual(miLines.slice(0, 3), ['#File_format=Hex', '#Address_depth=' + assembled.machineCodes.length, '#Data_width=32']);
+assert.equal(miLines.length, assembled.machineCodes.length + 3);
+assert.ok(miLines.slice(3).every(line => /^[0-9A-F]{8}$/.test(line)));
+assert.deepEqual(miLines.slice(3).map(line => parseInt(line, 16)), assembled.machineCodes.map(word => word >>> 0));
+for (const options of [['--mi-file-format', 'Bin'], ['--mi-depth', '4096'], ['--mi-width', '32']]) {
+    run(['build', source, ...common, '--format', 'mi', ...options], 2);
+}
+run(['assemble', asmFile, '--format', 'mi', '--out-dir', 'mi assembled']);
 assert.deepEqual(fs.readFileSync(path.join(scratch, 'mi assembled', 'main_space.mi')),
     fs.readFileSync(path.join(scratch, 'output mi', 'main_space.mi')));
 run(['assemble', asmFile, '--format', 'bin', '--out-dir', 'assembled']);
