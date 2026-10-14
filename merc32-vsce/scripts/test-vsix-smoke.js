@@ -927,6 +927,8 @@ async function runInstalledSmoke(options) {
             '--disable-extension', 'vscode.json-language-features',
             '--disable-extension', 'vscode.npm',
             '--disable-extension', 'vscode.typescript-language-features',
+            '--disable-extension', 'vscode.configuration-editing',
+            '--disable-extension', 'vscode.extension-editing',
         ] : []),
         '--new-window',
         '--no-sandbox',
