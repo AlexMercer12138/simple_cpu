@@ -46,7 +46,10 @@ async function withHostCompilerBlocked(action) {
 
 function blockedMethod(name) {
     return function () {
-        const error = new Error(`host process launch is forbidden during installed extension audit: ${name}`);
+        const caller = new Error().stack?.split('\n').slice(2).join('\n');
+        const error = new Error(
+            `host process launch is forbidden during installed extension audit: ${name}`
+            + (caller ? `\n${caller}` : ''));
         error.code = 'MERC32_PROCESS_LAUNCH_DENIED';
         error.processApi = name;
         throw error;
