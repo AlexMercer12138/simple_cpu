@@ -44,10 +44,28 @@ jobs:
       - name: Run CPU RTL regression
         run: npm run test:cpu
 
-      - name: Run SoC regression
-        run: npm run test:soc
+      - name: Run SoC configuration tests
+        run: npm run test:soc:config
+
+      - name: Run SoC WebView interaction tests
+        run: npm run test:soc:webview:dom
+
+      - name: Run SoC WebView geometry tests
+        run: node scripts/test-soc-webview-geometry.js
         env:
           MERC32_BROWSER_PATH: /usr/bin/google-chrome
+
+      - name: Run SoC generator tests
+        run: node scripts/test-soc-generator.js
+
+      - name: Run SoC driver tests
+        run: node scripts/test-soc-drivers.js
+
+      - name: Run SoC RTL tests
+        run: node scripts/test-soc-rtl.js
+
+      - name: Verify VSIX runtime dependencies
+        run: npm run test:vsix:deps
 
       - name: Run extension host tests
         run: xvfb-run --auto-servernum npm run test:extension
