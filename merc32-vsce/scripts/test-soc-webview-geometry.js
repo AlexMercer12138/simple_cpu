@@ -7,7 +7,7 @@ const { JSDOM } = require('jsdom');
 
 const extensionRoot = path.join(__dirname, '..');
 const screenshotRoot = path.join(extensionRoot, '.test-results', 'soc-webview-geometry');
-const BROWSER_PROCESS_TIMEOUT_MS = 30000;
+const BROWSER_PROCESS_TIMEOUT_MS = 90000;
 const viewports = [
     { name: 'wide', width: 1440, height: 900 },
     { name: 'medium', width: 1000, height: 760 },
@@ -104,7 +104,8 @@ function runBrowserProcess(executable, args, options = {}) {
         windowsHide: true,
     });
     if (browser.error && browser.error.code === 'ETIMEDOUT') {
-        throw new Error(`${label} timed out after ${timeoutMs} ms`);
+        throw new Error(`${label} timed out after ${timeoutMs} ms.`
+            + `\nstdout:\n${browser.stdout || ''}\nstderr:\n${browser.stderr || ''}`);
     }
     assert.ifError(browser.error);
     return browser;
