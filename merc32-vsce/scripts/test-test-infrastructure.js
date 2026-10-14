@@ -144,11 +144,18 @@ function testScriptTempCleanup(scriptName, prefix) {
     fs.writeFileSync(preload, [
         "const fs = require('fs');",
         'const original = fs.writeFileSync;',
+        'const originalCopy = fs.copyFileSync;',
         'fs.writeFileSync = function (file, ...args) {',
         `    if (String(file).includes(${JSON.stringify(prefix)})) {`,
         "        throw new Error('injected test infrastructure failure');",
         '    }',
         '    return original.call(this, file, ...args);',
+        '};',
+        'fs.copyFileSync = function (source, target, ...args) {',
+        `    if (String(target).includes(${JSON.stringify(prefix)})) {`,
+        "        throw new Error('injected test infrastructure failure');",
+        '    }',
+        '    return originalCopy.call(this, source, target, ...args);',
         '};',
         '',
     ].join('\n'));

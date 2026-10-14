@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Verilog](https://img.shields.io/badge/Language-Verilog-blue.svg)](https://en.wikipedia.org/wiki/Verilog)
+[![CI](https://github.com/AlexMercer12138/simple_cpu/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AlexMercer12138/simple_cpu/actions/workflows/ci.yml)
 
 一个轻量级32位RISC CPU核心，采用Verilog HDL实现，面向嵌入式系统和SoC应用。
 
@@ -22,7 +23,7 @@
 - 📝 **灵活指令集** - 4位操作类型 × 4位功能码 = 最多256条指令
 - 🔄 **中断控制器** - 支持软件配置中断使能，中断触发方式，中断向量
 - 🔢 **有符号数支持** - 原生支持有符号数运算和比较
-- 🎨 **VSCode 扩展** - 集成汇编器、编译器、语法高亮、代码片段
+- 🎨 **VSCode 扩展** - 集成 C 编译、SoC 配置与生成、命令行工具
 
 ---
 
@@ -34,7 +35,7 @@
 MERC32/
 ├── docs/                         # 文档
 ├── example/                      # 示例程序
-├── merc32-vsce/                  # VSCode 汇编器扩展
+├── merc32-vsce/                  # VSCode 工具链扩展
 ├── rtl/                          # RTL源代码
 ├── LICENSE                       # MIT许可证
 └── README.md                     # 项目介绍
@@ -112,7 +113,7 @@ MERC32/
 
 ## 🛠️ VSCode 工具链扩展
 
-项目提供 `merc32-vsce` VSCode 扩展，集成了 MERC32 汇编器与 Tiny C 编译器，并通过活动栏侧边栏组织构建命令与产物。打开 `.asm` / `.c` 文件时，扩展会提供语法高亮、代码片段以及右上角的一键编译按钮，支持正常、打印、调试三种编译模式，并可将结果输出为 Verilog、COE、MIF、Intel HEX、Binary 或 `$readmemh` 内存文件。
+项目提供 `merc32-vsce` VSCode 工具链扩展，支持 C17 程序编译、可视化 SoC 配置与生成、外设驱动生成和独立 CLI。编译结果可输出为 Verilog、COE、MIF、Intel HEX、Binary、`$readmemh` 内存文件或高云 MI。扩展不提供汇编编辑器或汇编语法高亮；具体安装与使用方法见 [扩展文档](merc32-vsce/README.md)。
 
 当前 C 工具链使用 Aro C17 freestanding 前端，支持标准宏展开、条件预处理和包含，
 再生成 MERC32 对象并链接。已补齐常用整数表达式、字符串、局部静态对象、复合字面量、
@@ -212,8 +213,9 @@ CPU 只有在调试暂停状态下才接受寄存器读取请求。发起请求�
 
 ## 📚 相关文档
 
-- [指令集参考](ISA.md) - 完整的指令集说明
-- [VSCode 汇编器扩展](assembler/README.md) - 扩展安装、使用和市场页说明
+- [指令集参考](docs/ISA.md) - 完整的指令集说明
+- [C ABI 与语言子集](docs/ABI.md) - 调用约定、内存布局和支持范围
+- [VSCode 工具链扩展](merc32-vsce/README.md) - 扩展、CLI 与 SoC 配置器说明
 
 ---
 
