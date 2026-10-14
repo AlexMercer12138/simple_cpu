@@ -922,6 +922,11 @@ async function runInstalledSmoke(options) {
         workspaceDir,
         `--user-data-dir=${userDataDir}`,
         `--extensions-dir=${extensionsDir}`,
+        // These built-ins launch child processes during workspace activation on Linux.
+        ...(process.platform === 'linux' ? [
+            '--disable-extension', 'vscode.json-language-features',
+            '--disable-extension', 'vscode.npm',
+        ] : []),
         '--new-window',
         '--no-sandbox',
         ...NETWORK_LAUNCH_ARGS,
