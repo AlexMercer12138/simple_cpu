@@ -824,6 +824,8 @@ function assertGenerationOrchestration() {
         let rollbackIdentityInstalled;
         let rollbackIdentityBytes;
         let rollbackIdentityInstallCount = 0;
+        const rollbackIdentityAnchor = path.join(
+            rollbackIdentityProject, 'installed-identity-anchor');
         fs.linkSync = (oldPath, newPath) => {
             const isInstall = path.resolve(oldPath).includes(
                 `${path.sep}.rollback_identity_soc-staging-`)
@@ -831,6 +833,8 @@ function assertGenerationOrchestration() {
             if (isInstall) {
                 rollbackIdentityInstallCount += 1;
                 if (rollbackIdentityInstallCount === 2) {
+                    originalLinkForRollbackIdentity.call(
+                        fs, rollbackIdentityInstalled, rollbackIdentityAnchor);
                     fs.unlinkSync(rollbackIdentityInstalled);
                     writeFile(rollbackIdentityInstalled, rollbackIdentityBytes);
                     throw new Error('injected failure after same-content identity replacement');
