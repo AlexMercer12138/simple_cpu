@@ -70,6 +70,9 @@ jobs:
       - name: Run extension host tests
         run: xvfb-run --auto-servernum npm run test:extension
 
+      - name: Verify installed smoke guards
+        run: npm run test:smoke-extension:unit
+
       - name: Package VSIX
         run: npm run package:vsix
 

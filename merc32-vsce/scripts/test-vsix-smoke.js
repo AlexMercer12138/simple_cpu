@@ -8,6 +8,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { assertPersistedArtifactState } = require('./vsix-smoke-state');
+const { runInstalledHost } = require('./vsix-smoke-host');
 const { resolveVSCodeTestCachePath } = require('./vscode-test-cache');
 
 const AdmZip = require('adm-zip');
@@ -902,6 +903,13 @@ async function runInstalledSmoke(options) {
         MERC32_SMOKE_NETWORK_GUARD_LOG: networkGuardLog,
         MERC32_SMOKE_NETWORK_GUARD_TOKEN: networkGuardToken,
     });
+    const ripgrepExecutable = process.platform === 'linux'
+        ? path.join(path.dirname(executable), 'resources', 'app', 'node_modules.asar.unpacked',
+            '@vscode', 'ripgrep', 'bin', 'rg')
+        : undefined;
+    if (ripgrepExecutable !== undefined) {
+        requireExactFile(ripgrepExecutable, 'bundled VSCode ripgrep executable');
+    }
     installVsix(executable, options.vsixFile, extensionsDir, userDataDir,
         guardedEnvironment);
     const installedExtension = findInstalledExtension(extensionsDir, EXTENSION_ID);
@@ -926,13 +934,6 @@ async function runInstalledSmoke(options) {
         ...(process.platform === 'linux' ? [
             '--disable-extension', 'vscode.json-language-features',
             '--disable-extension', 'vscode.npm',
-            '--disable-extension', 'vscode.typescript-language-features',
-            '--disable-extension', 'vscode.configuration-editing',
-            '--disable-extension', 'vscode.extension-editing',
-            '--disable-extension', 'vscode.git',
-            '--disable-extension', 'vscode.git-base',
-            '--disable-extension', 'vscode.github',
-            '--disable-extension', 'vscode.github-authentication',
         ] : []),
         '--new-window',
         '--no-sandbox',
@@ -961,17 +962,18 @@ async function runInstalledSmoke(options) {
         MERC32_SMOKE_NETWORK_GUARD_LOG: networkGuardLog,
         MERC32_SMOKE_NETWORK_GUARD_TOKEN: networkGuardToken,
         MERC32_SMOKE_OUTPUT: outputDir,
+        ...(ripgrepExecutable === undefined ? {} : {
+            MERC32_SMOKE_RIPGREP_EXECUTABLE: ripgrepExecutable,
+        }),
         MERC32_SMOKE_REPOSITORY: options.repositoryRoot,
         MERC32_SMOKE_RESULT: resultFile,
         MERC32_SMOKE_TEMP_ROOT: options.tempRoot,
         MERC32_SMOKE_VSCODE_VERSION: VSCODE_VERSION,
         MERC32_SMOKE_WORKSPACE: workspaceDir,
     });
-    const host = spawnSync(executable, launchArgs, {
+    const host = runInstalledHost(executable, launchArgs, {
         cwd: options.tempRoot,
-        encoding: 'utf8',
         env: hostEnvironment,
-        maxBuffer: 32 * 1024 * 1024,
         timeout: 180_000,
     });
     assertSpawnPassed(host, 'installed VSIX extension host',

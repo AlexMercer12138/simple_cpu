@@ -89,6 +89,13 @@ async function run() {
     ]);
     assert.strictEqual(extension.isActive, false,
         'installed MERC32 extension activated while recording guard readiness');
+    const searchExecutable = process.env.MERC32_SMOKE_RIPGREP_EXECUTABLE;
+    if (searchExecutable !== undefined) {
+        assert.strictEqual(process.platform, 'linux');
+        assert.strictEqual(searchExecutable, path.join(vscode.env.appRoot,
+            'node_modules.asar.unpacked', '@vscode', 'ripgrep', 'bin', 'rg'));
+        requireExactFile(searchExecutable, 'bundled VSCode ripgrep executable');
+    }
     await withHostCompilerBlocked(async () => {
         const { spawnSync } = require('child_process');
         assert.throws(
@@ -180,7 +187,7 @@ async function run() {
         await vscode.commands.executeCommand('merc32-asm.compileCToAsm');
         requireExactFile(path.join(cSmokeRoot, 'main.asm'),
             'offline C frontend smoke assembly');
-    });
+    }, { searchExecutable });
 
     const hardwareFile = path.join(outputDir, 'hardware', 'all_peripherals_soc.v');
     assert.ok(!pathsOverlap(repositoryRoot, hardwareFile),
